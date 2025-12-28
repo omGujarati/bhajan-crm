@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { AdminLayout } from "@/components/admin/admin-layout";
 import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
-import { KanbanBoard } from "@/components/tickets/kanban-board";
-import { TicketForm } from "@/components/tickets/ticket-form";
+import { Select } from "@/components/ui/select";
+import { TicketDetailContent } from "@/components/tickets/ticket-detail-content";
 import { showToast } from "@/lib/toast";
-import { Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Ticket } from "@/server/models/ticket";
 
 interface User {
@@ -23,14 +23,16 @@ interface Team {
   name: string;
 }
 
-export default function TicketsPage() {
+export default function TicketDetailsPage() {
   const router = useRouter();
+  const params = useParams();
+  const ticketId = params.id as string;
+  
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [ticket, setTicket] = useState<Ticket | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [loadingTickets, setLoadingTickets] = useState(false);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [loadingTicket, setLoadingTicket] = useState(false);
 
   useEffect(() => {
     // Check authentication
@@ -50,31 +52,34 @@ export default function TicketsPage() {
 
     setUser(parsedUser);
     setLoading(false);
-    loadTickets();
+    loadTicket();
     loadTeams();
-  }, [router]);
+  }, [router, ticketId]);
 
-  const loadTickets = async () => {
-    setLoadingTickets(true);
+  const loadTicket = async () => {
+    if (!ticketId) return;
+    setLoadingTicket(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/tickets/list", {
+      const response = await fetch(`/api/tickets/${ticketId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
       const result = await response.json();
-      if (response.ok && result.tickets) {
-        setTickets(result.tickets);
+      if (response.ok && result.ticket) {
+        setTicket(result.ticket);
       } else {
-        showToast.error("Error", result.error || "Failed to load tickets");
+        showToast.error("Error", result.error || "Failed to load ticket");
+        router.push("/admin/tickets");
       }
     } catch (error) {
-      console.error("Error loading tickets:", error);
+      console.error("Error loading ticket:", error);
       showToast.error("Error", "An error occurred. Please try again.");
+      router.push("/admin/tickets");
     } finally {
-      setLoadingTickets(false);
+      setLoadingTicket(false);
     }
   };
 
@@ -96,10 +101,6 @@ export default function TicketsPage() {
     }
   };
 
-  const handleUpdate = () => {
-    loadTickets();
-  };
-
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -107,7 +108,11 @@ export default function TicketsPage() {
     router.push("/");
   };
 
-  if (loading) {
+  const handleUpdate = () => {
+    loadTicket();
+  };
+
+  if (loading || loadingTicket) {
     return (
       <AdminLayout
         user={user ? { name: user.name, email: user.email } : undefined}
@@ -120,57 +125,49 @@ export default function TicketsPage() {
     );
   }
 
+  if (!ticket) {
+    return (
+      <AdminLayout
+        user={user ? { name: user.name, email: user.email } : undefined}
+        onLogout={handleLogout}
+      >
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <p>Ticket not found</p>
+        </div>
+      </AdminLayout>
+    );
+  }
+
   return (
     <AdminLayout
       user={user ? { name: user.name, email: user.email } : undefined}
       onLogout={handleLogout}
     >
-      <div className="max-w-7xl mx-auto px-2">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <PageHeader title="Tickets" subtitle="Manage and track all tickets" />
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadTickets}
-              disabled={loadingTickets}
-            >
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${
-                  loadingTickets ? "animate-spin" : ""
-                }`}
-              />
-              Refresh
-            </Button>
-            <Button size="sm" onClick={() => setShowCreateForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Ticket
-            </Button>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/admin/tickets")}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Tickets
+          </Button>
+          <PageHeader
+            title={`Ticket ${ticket.ticketNo}`}
+            subtitle="View and manage ticket details"
+          />
         </div>
 
-        {loadingTickets ? (
-          <div className="flex items-center justify-center min-h-[400px]">
-            <p>Loading tickets...</p>
-          </div>
-        ) : (
-          <div className="bg-card border rounded-lg p-4 sm:p-6">
-            <KanbanBoard tickets={tickets} isAdmin={true} />
-          </div>
-        )}
-
-        {/* Create Ticket Form */}
-        <TicketForm
-          open={showCreateForm}
-          onClose={() => setShowCreateForm(false)}
-          onSuccess={() => {
-            loadTickets();
-            setShowCreateForm(false);
-          }}
+        <TicketDetailContent
+          ticket={ticket}
           isAdmin={true}
-          allTeams={teams}
+          teams={teams}
+          onUpdate={handleUpdate}
         />
       </div>
     </AdminLayout>
   );
 }
+

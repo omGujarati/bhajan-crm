@@ -8,4 +8,7 @@ export { PasswordInput } from "./password-input";
 export type { PasswordInputProps } from "./password-input";
 export { Avatar } from "./avatar";
 export { ConfirmDialog } from "./confirm-dialog";
+export { Dialog } from "./dialog";
+export { Select } from "./select";
+export { Textarea } from "./textarea";
 
