@@ -7,8 +7,11 @@ export interface User {
   phone?: string;
   password: string;
   role: UserRole;
-  teamId?: string; // For field team members
-  teamName?: string; // For field team members
+  teamIds?: string[]; // Array of team IDs for field team members (supports multiple teams)
+  teamNames?: string[]; // Array of team names for field team members (supports multiple teams)
+  // Legacy fields for backward compatibility (will be migrated)
+  teamId?: string;
+  teamName?: string;
   isActive: boolean;
   failedLoginAttempts?: number; // Track failed login attempts
   lockedUntil?: Date; // Account lockout timestamp
@@ -19,7 +22,10 @@ export interface User {
 
 export interface Team {
   _id?: string;
+  teamId: string; // Unique team ID like TEAM001
   name: string;
+  description?: string;
+  department?: string;
   createdBy: string; // Admin user ID
   createdAt: Date;
   updatedAt: Date;

@@ -203,7 +203,7 @@ export default function Home() {
       if (result.user.role === "admin") {
         router.push("/admin/dashboard");
       } else {
-        router.push("/team/dashboard");
+        router.push("/team/teams");
       }
     } catch (err) {
       showToast.error(

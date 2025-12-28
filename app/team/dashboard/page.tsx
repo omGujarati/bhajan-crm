@@ -10,6 +10,8 @@ interface User {
   email: string;
   phone?: string;
   role: string;
+  teamIds?: string[];
+  teamNames?: string[];
   teamId?: string;
   teamName?: string;
 }
@@ -61,7 +63,9 @@ export default function TeamDashboard() {
             <h1 className="text-3xl font-semibold">Team Dashboard</h1>
             <p className="text-muted-foreground">Welcome, {user?.name}</p>
             {user?.teamName && (
-              <p className="text-muted-foreground">Team: {user.teamName}</p>
+              <p className="text-muted-foreground">
+                Team{(user.teamNames && user.teamNames.length > 1) ? "s" : ""}: {user.teamNames && user.teamNames.length > 0 ? user.teamNames.join(", ") : (user.teamName || "N/A")}
+              </p>
             )}
           </div>
           <Button variant="outline" onClick={handleLogout}>

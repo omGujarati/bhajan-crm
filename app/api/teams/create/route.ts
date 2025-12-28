@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name } = body;
+    const { name, description, department } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -34,8 +34,73 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sanitize inputs
+    const { sanitizeInput, containsSQLInjection, containsXSS } = await import(
+      "@/lib/validation"
+    );
+
+    const sanitizedName = sanitizeInput(name);
+    if (sanitizedName.length < 2 || sanitizedName.length > 100) {
+      return NextResponse.json(
+        { error: "Name must be between 2 and 100 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (containsSQLInjection(sanitizedName) || containsXSS(sanitizedName)) {
+      return NextResponse.json(
+        { error: "Invalid characters in name" },
+        { status: 400 }
+      );
+    }
+
+    let sanitizedDescription: string | undefined;
+    if (description) {
+      sanitizedDescription = sanitizeInput(description);
+      if (sanitizedDescription.length > 500) {
+        return NextResponse.json(
+          { error: "Description must be less than 500 characters" },
+          { status: 400 }
+        );
+      }
+      if (
+        containsSQLInjection(sanitizedDescription) ||
+        containsXSS(sanitizedDescription)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid characters in description" },
+          { status: 400 }
+        );
+      }
+    }
+
+    let sanitizedDepartment: string | undefined;
+    if (department) {
+      sanitizedDepartment = sanitizeInput(department);
+      if (
+        sanitizedDepartment.length < 2 ||
+        sanitizedDepartment.length > 100
+      ) {
+        return NextResponse.json(
+          { error: "Department must be between 2 and 100 characters" },
+          { status: 400 }
+        );
+      }
+      if (
+        containsSQLInjection(sanitizedDepartment) ||
+        containsXSS(sanitizedDepartment)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid characters in department" },
+          { status: 400 }
+        );
+      }
+    }
+
     const teamId = await createTeam({
-      name,
+      name: sanitizedName,
+      description: sanitizedDescription,
+      department: sanitizedDepartment,
       createdBy: payload.userId,
     });
 

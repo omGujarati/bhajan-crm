@@ -49,8 +49,8 @@ export default function TeamLogin() {
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      // Redirect to team dashboard (to be created)
-      router.push("/team/dashboard");
+      // Redirect to team teams page
+      router.push("/team/teams");
     } catch (err) {
       setError("An error occurred. Please try again.");
       setLoading(false);
