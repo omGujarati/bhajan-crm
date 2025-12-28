@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 import { PasswordInput } from "@/components/ui/password-input";
+import { showToast } from "@/lib/toast";
 
 interface ApiResponse {
   message: string;
@@ -129,6 +130,15 @@ export default function Home() {
       if (!response.ok) {
         const errorMessage = result.error || "Login failed";
 
+        // Show error toast
+        if (errorMessage.toLowerCase().includes("locked")) {
+          showToast.warning("Account locked", errorMessage);
+        } else if (errorMessage.toLowerCase().includes("too many")) {
+          showToast.warning("Too many attempts", errorMessage);
+        } else {
+          showToast.error("Login failed", errorMessage);
+        }
+
         // Parse error to determine which field
         if (
           errorMessage.toLowerCase().includes("email") ||
@@ -160,12 +170,20 @@ export default function Home() {
 
       // Check role matches login type
       if (loginType === "admin" && result.user.role !== "admin") {
+        showToast.warning(
+          "Invalid account type",
+          "This is not an admin account"
+        );
         setEmailOrPhoneError("This is not an admin account");
         setLoading(false);
         return;
       }
 
       if (loginType === "team" && result.user.role !== "field_team") {
+        showToast.warning(
+          "Invalid account type",
+          "This is not a team member account"
+        );
         setEmailOrPhoneError("This is not a team member account");
         setLoading(false);
         return;
@@ -175,6 +193,12 @@ export default function Home() {
       localStorage.setItem("token", result.token);
       localStorage.setItem("user", JSON.stringify(result.user));
 
+      // Show success toast
+      showToast.success(
+        "Login successful!",
+        `Welcome back, ${result.user.name || "User"}`
+      );
+
       // Redirect based on role
       if (result.user.role === "admin") {
         router.push("/admin/dashboard");
@@ -182,6 +206,10 @@ export default function Home() {
         router.push("/team/dashboard");
       }
     } catch (err) {
+      showToast.error(
+        "Login failed",
+        "An unexpected error occurred. Please try again."
+      );
       setEmailOrPhoneError("An error occurred. Please try again.");
       setLoading(false);
     }

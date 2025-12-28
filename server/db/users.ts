@@ -161,3 +161,57 @@ export async function updateUserTeam(
       { $set: { teamId, teamName, updatedAt: new Date() } }
     );
 }
+
+export async function updateUserProfile(
+  userId: string,
+  updates: {
+    name?: string;
+    email?: string;
+    phone?: string | undefined;
+  }
+): Promise<void> {
+  const db = await connectToDatabase();
+  const updateData: any = {
+    updatedAt: new Date(),
+  };
+
+  // Only include fields that are actually being updated
+  if (updates.name !== undefined) {
+    updateData.name = updates.name;
+  }
+  if (updates.email !== undefined) {
+    updateData.email = updates.email;
+  }
+  if (updates.phone !== undefined) {
+    // If phone is explicitly set to undefined, remove it from the document
+    if (updates.phone === undefined || updates.phone === null || updates.phone === "") {
+      updateData.phone = null;
+    } else {
+      updateData.phone = updates.phone;
+    }
+  }
+
+  await db
+    .collection(USERS_COLLECTION)
+    .updateOne({ _id: new ObjectId(userId) as any }, { $set: updateData });
+}
+
+export async function updateUserPassword(
+  userId: string,
+  newPassword: string
+): Promise<void> {
+  const db = await connectToDatabase();
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await db
+    .collection(USERS_COLLECTION)
+    .updateOne(
+      { _id: new ObjectId(userId) as any },
+      {
+        $set: {
+          password: hashedPassword,
+          updatedAt: new Date(),
+        },
+      }
+    );
+}

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Urbanist } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const urbanist = Urbanist({
@@ -21,7 +22,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`light ${urbanist.variable}`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {children}
+        <Toaster position="top-right" />
+      </body>
     </html>
   );
 }

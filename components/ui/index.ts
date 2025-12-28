@@ -6,4 +6,5 @@ export { TextField } from "./text-field";
 export type { TextFieldProps } from "./text-field";
 export { PasswordInput } from "./password-input";
 export type { PasswordInputProps } from "./password-input";
+export { Avatar } from "./avatar";
 

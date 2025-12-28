@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import { Input } from "@/components/ui/input";
 import { AdminLayout } from "@/components/admin/admin-layout";
 import { PageHeader } from "@/components/admin/page-header";
 import { showToast } from "@/lib/toast";
@@ -25,7 +24,7 @@ interface User {
   teamName?: string;
 }
 
-export default function AdminDashboard() {
+export default function TeamsPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -203,8 +202,8 @@ export default function AdminDashboard() {
     >
       <div className="max-w-7xl mx-auto">
         <PageHeader
-          title="Dashboard"
-          subtitle={`Welcome, ${user?.name || ""}`}
+          title="Teams"
+          subtitle="Manage teams and team members"
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
