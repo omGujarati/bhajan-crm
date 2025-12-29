@@ -1,11 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { showToast } from "@/lib/toast";
-import { Calendar, Clock, User, Phone, Building, FileText, History, X, Plus, CheckCircle, XCircle, ClipboardList } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  User,
+  Phone,
+  Building,
+  FileText,
+  History,
+  X,
+  Plus,
+  CheckCircle,
+  XCircle,
+  ClipboardList,
+} from "lucide-react";
 import { Ticket, TicketHistory } from "@/server/models/ticket";
 import { ProgressForm } from "./progress-form";
 
@@ -39,14 +52,7 @@ export function TicketDetail({
   const [signingAsAdmin, setSigningAsAdmin] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
 
-  useEffect(() => {
-    if (open && ticketId) {
-      loadTicket();
-      loadHistory();
-    }
-  }, [open, ticketId]);
-
-  const loadTicket = async () => {
+  const loadTicket = useCallback(async () => {
     if (!ticketId) return;
     setLoading(true);
     try {
@@ -71,9 +77,9 @@ export function TicketDetail({
     } finally {
       setLoading(false);
     }
-  };
+  }, [ticketId]);
 
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     if (!ticketId) return;
     setLoadingHistory(true);
     try {
@@ -93,10 +99,18 @@ export function TicketDetail({
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, [ticketId]);
+
+  useEffect(() => {
+    if (open && ticketId) {
+      loadTicket();
+      loadHistory();
+    }
+  }, [open, ticketId, loadTicket, loadHistory]);
 
   const handleStatusChange = async () => {
-    if (!ticketId || !selectedStatus || selectedStatus === ticket?.status) return;
+    if (!ticketId || !selectedStatus || selectedStatus === ticket?.status)
+      return;
 
     setUpdatingStatus(true);
     try {
@@ -176,7 +190,10 @@ export function TicketDetail({
 
       const result = await response.json();
       if (response.ok) {
-        showToast.success("Success", "Ticket signed and completed successfully");
+        showToast.success(
+          "Success",
+          "Ticket signed and completed successfully"
+        );
         loadTicket();
         loadHistory();
         onUpdate();
@@ -227,7 +244,12 @@ export function TicketDetail({
   if (!open || !ticket) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} size="xl" title={`Ticket ${ticket.ticketNo}`}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      size="xl"
+      title={`Ticket ${ticket.ticketNo}`}
+    >
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <p>Loading...</p>
@@ -238,14 +260,22 @@ export function TicketDetail({
           <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-sm text-muted-foreground">Status:</span>
-              <span className={`ml-2 px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(ticket.status)}`}>
+              <span
+                className={`ml-2 px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(
+                  ticket.status
+                )}`}
+              >
                 {ticket.status.replace("_", " ").toUpperCase()}
               </span>
             </div>
             {ticket.assignedTeamName && (
               <div>
-                <span className="text-sm text-muted-foreground">Assigned to:</span>
-                <span className="ml-2 text-sm font-medium">{ticket.assignedTeamName}</span>
+                <span className="text-sm text-muted-foreground">
+                  Assigned to:
+                </span>
+                <span className="ml-2 text-sm font-medium">
+                  {ticket.assignedTeamName}
+                </span>
               </div>
             )}
           </div>
@@ -347,7 +377,9 @@ export function TicketDetail({
               <div className="flex items-start gap-2">
                 <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Assignment Name</p>
+                  <p className="text-sm text-muted-foreground">
+                    Assignment Name
+                  </p>
                   <p className="font-medium">{ticket.assignmentName}</p>
                 </div>
               </div>
@@ -356,8 +388,12 @@ export function TicketDetail({
               <div className="flex items-start gap-2">
                 <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Date of Commencement</p>
-                  <p className="font-medium">{formatDate(ticket.dateOfCommencement)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Date of Commencement
+                  </p>
+                  <p className="font-medium">
+                    {formatDate(ticket.dateOfCommencement)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -366,7 +402,9 @@ export function TicketDetail({
                 <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
                   <p className="text-sm text-muted-foreground">Working Days</p>
-                  <p className="font-medium">{ticket.numberOfWorkingDays} days</p>
+                  <p className="font-medium">
+                    {ticket.numberOfWorkingDays} days
+                  </p>
                 </div>
               </div>
             </div>
@@ -375,8 +413,12 @@ export function TicketDetail({
                 <div className="flex items-start gap-2">
                   <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="text-sm text-muted-foreground">Completion Date</p>
-                    <p className="font-medium">{formatDate(ticket.completionDate)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Completion Date
+                    </p>
+                    <p className="font-medium">
+                      {formatDate(ticket.completionDate)}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -400,13 +442,11 @@ export function TicketDetail({
                   className="flex items-center gap-2 text-sm font-medium hover:text-primary transition-colors"
                 >
                   <ClipboardList className="h-4 w-4" />
-                  Daily Progress ({ticket.dailyProgress?.length || 0}/{ticket.numberOfWorkingDays})
+                  Daily Progress ({ticket.dailyProgress?.length || 0}/
+                  {ticket.numberOfWorkingDays})
                 </button>
                 {!isAdmin && ticket.status === "in_progress" && (
-                  <Button
-                    size="sm"
-                    onClick={() => setShowProgressForm(true)}
-                  >
+                  <Button size="sm" onClick={() => setShowProgressForm(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Progress
                   </Button>
@@ -426,7 +466,9 @@ export function TicketDetail({
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <h4 className="font-semibold">Day {progress.day}</h4>
+                                <h4 className="font-semibold">
+                                  Day {progress.day}
+                                </h4>
                                 {progress.fieldOfficerSigned ? (
                                   <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-1 rounded-full">
                                     <CheckCircle className="h-3 w-3" />
@@ -455,30 +497,44 @@ export function TicketDetail({
                                 Added by: {progress.addedByName}
                               </p>
                             )}
-                            {progress.fieldOfficerSigned && progress.fieldOfficerSignature && (
-                              <div className="border-t pt-3">
-                                <p className="text-xs text-muted-foreground">
-                                  Signed by: <span className="font-medium">{progress.fieldOfficerSignature}</span>
-                                  {progress.fieldOfficerSignedAt && (
-                                    <span className="ml-2">
-                                      on {formatDateTime(progress.fieldOfficerSignedAt)}
+                            {progress.fieldOfficerSigned &&
+                              progress.fieldOfficerSignature && (
+                                <div className="border-t pt-3">
+                                  <p className="text-xs text-muted-foreground">
+                                    Signed by:{" "}
+                                    <span className="font-medium">
+                                      {progress.fieldOfficerSignature}
                                     </span>
-                                  )}
-                                </p>
-                              </div>
-                            )}
-                            {progress.shareableLink && !progress.fieldOfficerSigned && (
-                              <div className="border-t pt-3">
-                                <p className="text-xs text-muted-foreground">
-                                  Link: {progress.shareableLink}
-                                  {progress.linkExpiresAt && new Date(progress.linkExpiresAt) > new Date() && (
-                                    <span className="ml-2">
-                                      (Expires: {formatDateTime(progress.linkExpiresAt)})
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                            )}
+                                    {progress.fieldOfficerSignedAt && (
+                                      <span className="ml-2">
+                                        on{" "}
+                                        {formatDateTime(
+                                          progress.fieldOfficerSignedAt
+                                        )}
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            {progress.shareableLink &&
+                              !progress.fieldOfficerSigned && (
+                                <div className="border-t pt-3">
+                                  <p className="text-xs text-muted-foreground">
+                                    Link: {progress.shareableLink}
+                                    {progress.linkExpiresAt &&
+                                      new Date(progress.linkExpiresAt) >
+                                        new Date() && (
+                                        <span className="ml-2">
+                                          (Expires:{" "}
+                                          {formatDateTime(
+                                            progress.linkExpiresAt
+                                          )}
+                                          )
+                                        </span>
+                                      )}
+                                  </p>
+                                </div>
+                              )}
                           </div>
                         ))}
                     </div>
@@ -489,37 +545,48 @@ export function TicketDetail({
                   )}
 
                   {/* Admin Final Signature */}
-                  {isAdmin && ticket.dailyProgress && ticket.dailyProgress.length === ticket.numberOfWorkingDays && (
-                    <div className="border rounded-lg p-4 bg-muted/50 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold">Final Signature</h4>
-                          <p className="text-sm text-muted-foreground">
-                            All daily progress must be signed before admin can sign
-                          </p>
+                  {isAdmin &&
+                    ticket.dailyProgress &&
+                    ticket.dailyProgress.length ===
+                      ticket.numberOfWorkingDays && (
+                      <div className="border rounded-lg p-4 bg-muted/50 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-semibold">Final Signature</h4>
+                            <p className="text-sm text-muted-foreground">
+                              All daily progress must be signed before admin can
+                              sign
+                            </p>
+                          </div>
+                          {ticket.adminSigned ? (
+                            <span className="flex items-center gap-1 text-sm text-green-700 bg-green-100 px-3 py-1 rounded-full">
+                              <CheckCircle className="h-4 w-4" />
+                              Signed by {ticket.adminSignature}
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={handleAdminSign}
+                              disabled={
+                                signingAsAdmin ||
+                                !ticket.dailyProgress?.every(
+                                  (p) => p.fieldOfficerSigned
+                                )
+                              }
+                            >
+                              {signingAsAdmin
+                                ? "Signing..."
+                                : "Sign & Complete"}
+                            </Button>
+                          )}
                         </div>
-                        {ticket.adminSigned ? (
-                          <span className="flex items-center gap-1 text-sm text-green-700 bg-green-100 px-3 py-1 rounded-full">
-                            <CheckCircle className="h-4 w-4" />
-                            Signed by {ticket.adminSignature}
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={handleAdminSign}
-                            disabled={signingAsAdmin || !ticket.dailyProgress?.every((p) => p.fieldOfficerSigned)}
-                          >
-                            {signingAsAdmin ? "Signing..." : "Sign & Complete"}
-                          </Button>
+                        {ticket.adminSigned && ticket.adminSignedAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Signed on {formatDateTime(ticket.adminSignedAt)}
+                          </p>
                         )}
                       </div>
-                      {ticket.adminSigned && ticket.adminSignedAt && (
-                        <p className="text-xs text-muted-foreground">
-                          Signed on {formatDateTime(ticket.adminSignedAt)}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    )}
                 </div>
               )}
             </div>
@@ -542,24 +609,40 @@ export function TicketDetail({
             {showHistory && (
               <div className="mt-4 space-y-3">
                 {loadingHistory ? (
-                  <p className="text-sm text-muted-foreground">Loading history...</p>
+                  <p className="text-sm text-muted-foreground">
+                    Loading history...
+                  </p>
                 ) : history.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No history available</p>
+                  <p className="text-sm text-muted-foreground">
+                    No history available
+                  </p>
                 ) : (
                   <div className="space-y-3">
                     {history.map((entry, index) => (
-                      <div key={index} className="border-l-2 border-primary/20 pl-4 py-2">
+                      <div
+                        key={index}
+                        className="border-l-2 border-primary/20 pl-4 py-2"
+                      >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
-                            <p className="text-sm font-medium">{entry.description || entry.action}</p>
+                            <p className="text-sm font-medium">
+                              {entry.description || entry.action}
+                            </p>
                             {entry.oldValue && entry.newValue && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                Changed from <span className="font-medium">{entry.oldValue}</span> to{" "}
-                                <span className="font-medium">{entry.newValue}</span>
+                                Changed from{" "}
+                                <span className="font-medium">
+                                  {entry.oldValue}
+                                </span>{" "}
+                                to{" "}
+                                <span className="font-medium">
+                                  {entry.newValue}
+                                </span>
                               </p>
                             )}
                             <p className="text-xs text-muted-foreground mt-1">
-                              by {entry.changedByName || "User"} • {formatDateTime(entry.timestamp)}
+                              by {entry.changedByName || "User"} •{" "}
+                              {formatDateTime(entry.timestamp)}
                             </p>
                           </div>
                         </div>
@@ -588,4 +671,3 @@ export function TicketDetail({
     </Dialog>
   );
 }
-

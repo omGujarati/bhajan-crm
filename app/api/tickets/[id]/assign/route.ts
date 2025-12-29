@@ -63,13 +63,21 @@ export async function PATCH(
       );
     }
 
-    // Get user details
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+    // Get user details for admin name
+    let adminName: string = "Admin";
+    try {
+      const user = await findUserById(payload.userId);
+      if (user) {
+        adminName = user.name;
+      } else {
+        // If user not found, use email from token as fallback
+        adminName = payload.email || "Admin";
+        console.warn(`User not found for userId: ${payload.userId}, using email as fallback`);
+      }
+    } catch (error) {
+      // If there's an error finding user, use email from token as fallback
+      adminName = payload.email || "Admin";
+      console.error(`Error finding user for ticket assignment: ${error}`);
     }
 
     // Assign ticket to team
@@ -78,7 +86,7 @@ export async function PATCH(
       teamId,
       team.name,
       payload.userId,
-      user.name
+      adminName
     );
 
     return NextResponse.json({

@@ -46,13 +46,21 @@ export async function POST(
       );
     }
 
-    // Get admin details
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+    // Get admin details for admin name
+    let adminName: string = "Admin";
+    try {
+      const user = await findUserById(payload.userId);
+      if (user) {
+        adminName = user.name;
+      } else {
+        // If user not found, use email from token as fallback
+        adminName = payload.email || "Admin";
+        console.warn(`User not found for userId: ${payload.userId}, using email as fallback`);
+      }
+    } catch (error) {
+      // If there's an error finding user, use email from token as fallback
+      adminName = payload.email || "Admin";
+      console.error(`Error finding user for admin signature: ${error}`);
     }
 
     // Get signature from request body
@@ -89,7 +97,7 @@ export async function POST(
     }
 
     // Submit admin signature
-    await submitAdminSignature(params.id, payload.userId, user.name, sanitizedSignature, signatureType);
+    await submitAdminSignature(params.id, payload.userId, adminName, sanitizedSignature, signatureType);
 
     return NextResponse.json({
       success: true,

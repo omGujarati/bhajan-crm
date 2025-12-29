@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SignaturePad } from "@/components/ui/signature-pad";
@@ -36,13 +36,7 @@ export default function ProgressFormPage() {
   const [success, setSuccess] = useState(false);
   const linkId = params.linkId as string;
 
-  useEffect(() => {
-    if (linkId) {
-      loadProgressData();
-    }
-  }, [linkId]);
-
-  const loadProgressData = async () => {
+  const loadProgressData = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/progress/${linkId}`);
@@ -66,7 +60,13 @@ export default function ProgressFormPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [linkId]);
+
+  useEffect(() => {
+    if (linkId) {
+      loadProgressData();
+    }
+  }, [linkId, loadProgressData]);
 
   const handleSignatureChange = (sig: string, type: "text" | "image") => {
     setSignature(sig);

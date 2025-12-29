@@ -47,31 +47,41 @@ export async function GET(request: NextRequest) {
         ];
       } else {
         // Individual user login
-        const user = await findUserById(payload.userId);
-        if (!user) {
-          return NextResponse.json(
-            { error: "User not found" },
-            { status: 404 }
-          );
-        }
-        // Team members can see:
-        // 1. Tickets they created (createdBy)
-        // 2. Tickets assigned to their teams (assignedTeamId)
-        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-        
-        // Build OR condition for MongoDB query
-        const orConditions: any[] = [
-          { createdBy: payload.userId }, // Tickets created by this user
-        ];
-        
-        if (teamIds.length > 0) {
-          orConditions.push({ assignedTeamId: { $in: teamIds } });
-        }
-        
-        if (orConditions.length > 0) {
-          filters.$or = orConditions;
-        } else {
-          // If user has no teams and hasn't created any tickets, return empty
+        try {
+          const user = await findUserById(payload.userId);
+          if (!user) {
+            // If user not found, return empty tickets list
+            return NextResponse.json({
+              success: true,
+              tickets: [],
+            });
+          }
+          // Team members can see:
+          // 1. Tickets they created (createdBy)
+          // 2. Tickets assigned to their teams (assignedTeamId)
+          const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+          
+          // Build OR condition for MongoDB query
+          const orConditions: any[] = [
+            { createdBy: payload.userId }, // Tickets created by this user
+          ];
+          
+          if (teamIds.length > 0) {
+            orConditions.push({ assignedTeamId: { $in: teamIds } });
+          }
+          
+          if (orConditions.length > 0) {
+            filters.$or = orConditions;
+          } else {
+            // If user has no teams and hasn't created any tickets, return empty
+            return NextResponse.json({
+              success: true,
+              tickets: [],
+            });
+          }
+        } catch (error) {
+          console.error(`Error finding user for ticket list: ${error}`);
+          // If error finding user, return empty tickets list
           return NextResponse.json({
             success: true,
             tickets: [],

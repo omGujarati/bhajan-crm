@@ -79,18 +79,26 @@ export async function POST(
         }
       } else {
         // Individual user login - check if user's team matches assigned team
-        const user = await findUserById(payload.userId);
-        if (!user) {
+        try {
+          const user = await findUserById(payload.userId);
+          if (!user) {
+            return NextResponse.json(
+              { error: "User not found" },
+              { status: 404 }
+            );
+          }
+          const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+          if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
+            return NextResponse.json(
+              { error: "You don't have permission to add progress to this ticket" },
+              { status: 403 }
+            );
+          }
+        } catch (error) {
+          console.error(`Error finding user for progress permission check: ${error}`);
           return NextResponse.json(
             { error: "User not found" },
             { status: 404 }
-          );
-        }
-        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-        if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
-          return NextResponse.json(
-            { error: "You don't have permission to add progress to this ticket" },
-            { status: 403 }
           );
         }
       }
@@ -129,29 +137,37 @@ export async function POST(
         teamEmail = team.email;
       } else {
         // Individual user login - get their team
-        const user = await findUserById(payload.userId);
-        if (!user) {
+        try {
+          const user = await findUserById(payload.userId);
+          if (!user) {
+            return NextResponse.json(
+              { error: "User not found" },
+              { status: 404 }
+            );
+          }
+          // Get the team ID from ticket assignment or user's first team
+          teamId = ticket.assignedTeamId || user.teamIds?.[0] || user.teamId;
+          if (!teamId) {
+            return NextResponse.json(
+              { error: "User is not assigned to a team" },
+              { status: 403 }
+            );
+          }
+          const { findTeamById } = await import("@/server/db/users");
+          const team = await findTeamById(teamId);
+          if (team) {
+            teamName = team.name;
+            teamEmail = team.email;
+          }
+          addedBy = user._id;
+          addedByName = user.name;
+        } catch (error) {
+          console.error(`Error finding user for progress: ${error}`);
           return NextResponse.json(
             { error: "User not found" },
             { status: 404 }
           );
         }
-        // Get the team ID from ticket assignment or user's first team
-        teamId = ticket.assignedTeamId || user.teamIds?.[0] || user.teamId;
-        if (!teamId) {
-          return NextResponse.json(
-            { error: "User is not assigned to a team" },
-            { status: 403 }
-          );
-        }
-        const { findTeamById } = await import("@/server/db/users");
-        const team = await findTeamById(teamId);
-        if (team) {
-          teamName = team.name;
-          teamEmail = team.email;
-        }
-        addedBy = user._id;
-        addedByName = user.name;
       }
     } else if (payload.role === "admin") {
       // Admin can add progress - need team ID from ticket
@@ -172,10 +188,21 @@ export async function POST(
       teamId = team._id!;
       teamName = team.name;
       teamEmail = team.email;
-      const user = await findUserById(payload.userId);
-      if (user) {
-        addedBy = user._id;
-        addedByName = user.name;
+      // For admin, use email as fallback if user not found
+      try {
+        const user = await findUserById(payload.userId);
+        if (user) {
+          addedBy = user._id;
+          addedByName = user.name;
+        } else {
+          addedBy = payload.userId;
+          addedByName = payload.email || "Admin";
+          console.warn(`User not found for admin progress: ${payload.userId}, using email as fallback`);
+        }
+      } catch (error) {
+        console.error(`Error finding user for admin progress: ${error}`);
+        addedBy = payload.userId;
+        addedByName = payload.email || "Admin";
       }
     }
 

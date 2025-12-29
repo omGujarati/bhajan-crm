@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { TeamLayout } from "@/components/team/team-layout";
 import { PageHeader } from "@/components/team/page-header";
@@ -27,27 +27,7 @@ export default function TeamTicketDetailsPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loadingTicket, setLoadingTicket] = useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const userData = localStorage.getItem("user");
-
-    if (!token || !userData) {
-      router.push("/");
-      return;
-    }
-
-    const parsedUser = JSON.parse(userData);
-    if (parsedUser.role !== "field_team") {
-      router.push("/");
-      return;
-    }
-
-    setUser(parsedUser);
-    setLoading(false);
-    loadTicket();
-  }, [router, ticketId]);
-
-  const loadTicket = async () => {
+  const loadTicket = useCallback(async () => {
     if (!ticketId) return;
     setLoadingTicket(true);
     try {
@@ -72,7 +52,27 @@ export default function TeamTicketDetailsPage() {
     } finally {
       setLoadingTicket(false);
     }
-  };
+  }, [ticketId, router]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
+
+    if (!token || !userData) {
+      router.push("/");
+      return;
+    }
+
+    const parsedUser = JSON.parse(userData);
+    if (parsedUser.role !== "field_team") {
+      router.push("/");
+      return;
+    }
+
+    setUser(parsedUser);
+    setLoading(false);
+    loadTicket();
+  }, [router, ticketId, loadTicket]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");

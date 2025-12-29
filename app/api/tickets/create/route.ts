@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTicket } from "@/server/db/tickets";
 import { verifyToken, getTokenFromRequest } from "@/lib/auth";
-import { findUserById } from "@/server/db/users";
+import { findUserById, findTeamByTeamId, findTeamById } from "@/server/db/users";
 
 export const dynamic = 'force-dynamic';
 
@@ -67,13 +67,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user details
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+    // Get user/team details - handle both individual user and team logins
+    let creatorName: string;
+    let creatorId: string = payload.userId;
+    
+    if (payload.teamId) {
+      // Team login - get team details
+      const team = await findTeamByTeamId(payload.teamId);
+      if (!team) {
+        return NextResponse.json(
+          { error: "Team not found" },
+          { status: 404 }
+        );
+      }
+      creatorName = team.name;
+    } else {
+      // Individual user login (including admin) - get user details with fallback
+      try {
+        const user = await findUserById(payload.userId);
+        if (user) {
+          creatorName = user.name;
+        } else {
+          // If user not found, use email from token as fallback
+          creatorName = payload.email || "User";
+          console.warn(`User not found for userId: ${payload.userId}, using email as fallback`);
+        }
+      } catch (error) {
+        // If there's an error finding user, use email from token as fallback
+        creatorName = payload.email || "User";
+        console.error(`Error finding user for ticket creation: ${error}`);
+      }
     }
 
     // Parse dates
@@ -119,23 +142,60 @@ export async function POST(request: NextRequest) {
     
     if (requestedTeamId) {
       if (payload.role === "field_team") {
-        // Team members can only assign to teams they belong to
-        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-        const teamNames = user.teamNames || (user.teamName ? [user.teamName] : []);
-        
-        if (teamIds.includes(requestedTeamId)) {
-          assignedTeamId = requestedTeamId;
-          const teamIndex = teamIds.indexOf(requestedTeamId);
-          assignedTeamName = teamNames[teamIndex] || teamNames[0];
+        // Check if this is a team login or individual user login
+        if (payload.teamId) {
+          // Team login - can only assign to themselves
+          const team = await findTeamByTeamId(payload.teamId);
+          if (!team) {
+            return NextResponse.json(
+              { error: "Team not found" },
+              { status: 404 }
+            );
+          }
+          // Convert team._id to string for comparison (assignedTeamId is stored as string)
+          const teamIdString = team._id?.toString();
+          if (teamIdString === requestedTeamId) {
+            assignedTeamId = requestedTeamId;
+            assignedTeamName = team.name;
+          } else {
+            return NextResponse.json(
+              { error: "You can only assign tickets to your own team" },
+              { status: 400 }
+            );
+          }
         } else {
-          return NextResponse.json(
-            { error: "You can only assign tickets to teams you belong to" },
-            { status: 400 }
-          );
+          // Individual user login - can only assign to teams they belong to
+          try {
+            const user = await findUserById(payload.userId);
+            if (!user) {
+              return NextResponse.json(
+                { error: "User not found" },
+                { status: 404 }
+              );
+            }
+            const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+            const teamNames = user.teamNames || (user.teamName ? [user.teamName] : []);
+            
+            if (teamIds.includes(requestedTeamId)) {
+              assignedTeamId = requestedTeamId;
+              const teamIndex = teamIds.indexOf(requestedTeamId);
+              assignedTeamName = teamNames[teamIndex] || teamNames[0];
+            } else {
+              return NextResponse.json(
+                { error: "You can only assign tickets to teams you belong to" },
+                { status: 400 }
+              );
+            }
+          } catch (error) {
+            console.error(`Error finding user for team assignment: ${error}`);
+            return NextResponse.json(
+              { error: "User not found" },
+              { status: 404 }
+            );
+          }
         }
       } else if (payload.role === "admin") {
         // Admin can assign to any team
-        const { findTeamById } = await import("@/server/db/users");
         const team = await findTeamById(requestedTeamId);
         if (team) {
           assignedTeamId = requestedTeamId;
@@ -163,8 +223,8 @@ export async function POST(request: NextRequest) {
       completionDate: parsedCompletionDate,
       assignedTeamId,
       assignedTeamName,
-      createdBy: payload.userId,
-      createdByName: user.name,
+      createdBy: creatorId,
+      createdByName: creatorName,
       dailyProgress: [], // Initialize empty array for daily progress
       adminSigned: false, // Initialize as not signed
     });

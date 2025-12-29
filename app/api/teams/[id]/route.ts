@@ -219,7 +219,8 @@ export async function PATCH(
       // Check if email is already taken by another team
       const { findTeamByEmail } = await import("@/server/db/users");
       const existingTeam = await findTeamByEmail(emailValidation.sanitized);
-      if (existingTeam && existingTeam._id !== params.id) {
+      // Convert both IDs to strings for proper comparison (ObjectId vs string)
+      if (existingTeam && existingTeam._id?.toString() !== params.id) {
         return NextResponse.json(
           { error: "Email is already in use by another team" },
           { status: 400 }

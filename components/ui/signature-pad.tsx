@@ -5,6 +5,7 @@ import SignatureCanvas from "react-signature-canvas";
 import { Button } from "./button";
 import { TextField } from "./text-field";
 import { X, Trash2, Type } from "lucide-react";
+import Image from "next/image";
 
 interface SignaturePadProps {
   value?: string;
@@ -13,7 +14,12 @@ interface SignaturePadProps {
   disabled?: boolean;
 }
 
-export function SignaturePad({ value, onChange, label = "Signature", disabled = false }: SignaturePadProps) {
+export function SignaturePad({
+  value,
+  onChange,
+  label = "Signature",
+  disabled = false,
+}: SignaturePadProps) {
   const canvasRef = useRef<SignatureCanvas>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [signatureType, setSignatureType] = useState<"draw" | "text">("draw");
@@ -44,7 +50,7 @@ export function SignaturePad({ value, onChange, label = "Signature", disabled = 
         setIsCanvasEmpty(false);
         // Load image to canvas if it exists
         if (canvasRef.current) {
-          const img = new Image();
+          const img = new (window as any).Image();
           img.src = value;
           img.onload = () => {
             const canvas = canvasRef.current?.getCanvas();
@@ -131,7 +137,9 @@ export function SignaturePad({ value, onChange, label = "Signature", disabled = 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-foreground">{label}</label>
+        <label className="block text-sm font-medium text-foreground">
+          {label}
+        </label>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -159,10 +167,10 @@ export function SignaturePad({ value, onChange, label = "Signature", disabled = 
       {signatureType === "draw" ? (
         <div ref={containerRef} className="border rounded-lg p-2 bg-background">
           <div className="w-full flex justify-center overflow-x-auto">
-            <div 
+            <div
               className="relative border rounded bg-white inline-block"
-              style={{ 
-                width: `${canvasSize.width}px`, 
+              style={{
+                width: `${canvasSize.width}px`,
                 height: `${canvasSize.height}px`,
                 minWidth: "300px",
               }}
@@ -219,8 +227,16 @@ export function SignaturePad({ value, onChange, label = "Signature", disabled = 
           </div>
           {hasSignature && value && value.startsWith("data:image") && (
             <div className="mt-2">
-              <p className="text-xs text-muted-foreground mb-1">Current signature:</p>
-              <img src={value} alt="Signature" className="max-w-full h-24 border rounded" />
+              <p className="text-xs text-muted-foreground mb-1">
+                Current signature:
+              </p>
+              <Image
+                width={100}
+                height={100}
+                src={value}
+                alt="Signature"
+                className="max-w-full h-24 border rounded"
+              />
             </div>
           )}
         </div>
@@ -244,4 +260,3 @@ export function SignaturePad({ value, onChange, label = "Signature", disabled = 
     </div>
   );
 }
-

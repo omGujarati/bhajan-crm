@@ -337,3 +337,17 @@ export async function getTicketHistory(
   }
   return ticket.history || [];
 }
+
+// Delete ticket
+export async function deleteTicket(ticketId: string): Promise<void> {
+  const db = await connectToDatabase();
+  
+  const ticket = await findTicketById(ticketId);
+  if (!ticket) {
+    throw new Error("Ticket not found");
+  }
+
+  await db.collection(TICKETS_COLLECTION).deleteOne({
+    _id: new ObjectId(ticketId) as any,
+  });
+}

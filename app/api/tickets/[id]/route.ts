@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findTicketById, updateTicket } from "@/server/db/tickets";
+import { findTicketById, updateTicket, deleteTicket } from "@/server/db/tickets";
 import { verifyToken, getTokenFromRequest } from "@/lib/auth";
 import { findUserById } from "@/server/db/users";
 
@@ -58,19 +58,27 @@ export async function GET(
         }
       } else {
         // Individual user login
-        const user = await findUserById(payload.userId);
-        if (!user) {
+        try {
+          const user = await findUserById(payload.userId);
+          if (!user) {
+            return NextResponse.json(
+              { error: "User not found" },
+              { status: 404 }
+            );
+          }
+          const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+          // Team members can see tickets they created OR tickets assigned to their team
+          if (ticket.createdBy !== payload.userId && (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId))) {
+            return NextResponse.json(
+              { error: "You don't have permission to view this ticket" },
+              { status: 403 }
+            );
+          }
+        } catch (error) {
+          console.error(`Error finding user for ticket view: ${error}`);
           return NextResponse.json(
             { error: "User not found" },
             { status: 404 }
-          );
-        }
-        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-        // Team members can see tickets they created OR tickets assigned to their team
-        if (ticket.createdBy !== payload.userId && (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId))) {
-          return NextResponse.json(
-            { error: "You don't have permission to view this ticket" },
-            { status: 403 }
           );
         }
       }
@@ -134,13 +142,21 @@ export async function PATCH(
       );
     }
 
-    // Get user details
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+    // Get user details for admin name
+    let adminName: string = "Admin";
+    try {
+      const user = await findUserById(payload.userId);
+      if (user) {
+        adminName = user.name;
+      } else {
+        // If user not found, use email from token as fallback
+        adminName = payload.email || "Admin";
+        console.warn(`User not found for userId: ${payload.userId}, using email as fallback`);
+      }
+    } catch (error) {
+      // If there's an error finding user, use email from token as fallback
+      adminName = payload.email || "Admin";
+      console.error(`Error finding user for ticket update: ${error}`);
     }
 
     // Sanitize inputs
@@ -205,7 +221,7 @@ export async function PATCH(
       params.id,
       updates,
       payload.userId,
-      user.name
+      adminName
     );
 
     return NextResponse.json({
@@ -216,6 +232,54 @@ export async function PATCH(
     console.error("Update ticket error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// Delete ticket (admin only)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Check authentication
+    const token = getTokenFromRequest(request);
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const payload = verifyToken(token);
+    if (!payload || payload.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only admins can delete tickets" },
+        { status: 403 }
+      );
+    }
+
+    // Check if ticket exists
+    const ticket = await findTicketById(params.id);
+    if (!ticket) {
+      return NextResponse.json(
+        { error: "Ticket not found" },
+        { status: 404 }
+      );
+    }
+
+    // Delete ticket
+    await deleteTicket(params.id);
+
+    return NextResponse.json({
+      success: true,
+      message: "Ticket deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete ticket error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     );
   }

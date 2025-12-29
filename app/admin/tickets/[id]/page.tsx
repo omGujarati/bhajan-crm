@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AdminLayout } from "@/components/admin/admin-layout";
 import { PageHeader } from "@/components/admin/page-header";
@@ -34,29 +34,7 @@ export default function TicketDetailsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loadingTicket, setLoadingTicket] = useState(false);
 
-  useEffect(() => {
-    // Check authentication
-    const token = localStorage.getItem("token");
-    const userData = localStorage.getItem("user");
-
-    if (!token || !userData) {
-      router.push("/login/admin");
-      return;
-    }
-
-    const parsedUser = JSON.parse(userData);
-    if (parsedUser.role !== "admin") {
-      router.push("/login/admin");
-      return;
-    }
-
-    setUser(parsedUser);
-    setLoading(false);
-    loadTicket();
-    loadTeams();
-  }, [router, ticketId]);
-
-  const loadTicket = async () => {
+  const loadTicket = useCallback(async () => {
     if (!ticketId) return;
     setLoadingTicket(true);
     try {
@@ -81,9 +59,9 @@ export default function TicketDetailsPage() {
     } finally {
       setLoadingTicket(false);
     }
-  };
+  }, [ticketId, router]);
 
-  const loadTeams = async () => {
+  const loadTeams = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch("/api/teams/list", {
@@ -99,7 +77,29 @@ export default function TicketDetailsPage() {
     } catch (error) {
       console.error("Error loading teams:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Check authentication
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
+
+    if (!token || !userData) {
+      router.push("/login/admin");
+      return;
+    }
+
+    const parsedUser = JSON.parse(userData);
+    if (parsedUser.role !== "admin") {
+      router.push("/login/admin");
+      return;
+    }
+
+    setUser(parsedUser);
+    setLoading(false);
+    loadTicket();
+    loadTeams();
+  }, [router, loadTicket, loadTeams]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");

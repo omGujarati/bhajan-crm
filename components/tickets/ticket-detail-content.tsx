@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -24,6 +24,7 @@ import { Ticket, TicketHistory } from "@/server/models/ticket";
 import { ProgressForm } from "./progress-form";
 import { EditTicketForm } from "./edit-ticket-form";
 import { SignaturePad } from "@/components/ui/signature-pad";
+import Image from "next/image";
 
 interface TicketDetailContentProps {
   ticket: Ticket;
@@ -72,12 +73,42 @@ export function TicketDetailContent({
   const [selectedMemberId, setSelectedMemberId] = useState<string | "all">(
     "all"
   ); // For admin member tabs
+  const [showReportPreview, setShowReportPreview] = useState(false);
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  const loadHistory = useCallback(
+    async (ticketId?: string) => {
+      const idToUse = ticketId || ticket._id;
+      if (!idToUse) return;
+      setLoadingHistory(true);
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`/api/tickets/${idToUse}/history`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const result = await response.json();
+        if (response.ok && result.history) {
+          setHistory(result.history);
+        }
+      } catch (error) {
+        console.error("Error loading history:", error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    },
+    [ticket._id]
+  );
 
   useEffect(() => {
     setTicket(initialTicket);
     setSelectedStatus(initialTicket.status);
     setSelectedTeam(initialTicket.assignedTeamId || "");
-    loadHistory();
+    if (initialTicket._id) {
+      loadHistory(initialTicket._id);
+    }
 
     // Get current user ID and team ID from token (decode JWT payload on client)
     try {
@@ -98,7 +129,7 @@ export function TicketDetailContent({
     } catch (error) {
       console.error("Error getting user ID:", error);
     }
-  }, [initialTicket]);
+  }, [initialTicket, loadHistory]);
 
   const loadTicket = async () => {
     if (!ticket._id) return;
@@ -118,28 +149,6 @@ export function TicketDetailContent({
       }
     } catch (error) {
       console.error("Error loading ticket:", error);
-    }
-  };
-
-  const loadHistory = async () => {
-    if (!ticket._id) return;
-    setLoadingHistory(true);
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`/api/tickets/${ticket._id}/history`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const result = await response.json();
-      if (response.ok && result.history) {
-        setHistory(result.history);
-      }
-    } catch (error) {
-      console.error("Error loading history:", error);
-    } finally {
-      setLoadingHistory(false);
     }
   };
 
@@ -426,14 +435,59 @@ export function TicketDetailContent({
           )}
         </div>
         {isAdmin && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowEditForm(true)}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Edit Ticket
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowEditForm(true)}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Ticket
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={async () => {
+                if (!ticket._id) return;
+                if (
+                  !confirm(
+                    "Are you sure you want to delete this ticket? This action cannot be undone."
+                  )
+                ) {
+                  return;
+                }
+                try {
+                  const token = localStorage.getItem("token");
+                  const response = await fetch(`/api/tickets/${ticket._id}`, {
+                    method: "DELETE",
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                    },
+                  });
+
+                  const result = await response.json();
+                  if (response.ok) {
+                    showToast.success("Success", "Ticket deleted successfully");
+                    router.push("/admin/tickets");
+                  } else {
+                    showToast.error(
+                      "Error",
+                      result.error || "Failed to delete ticket"
+                    );
+                  }
+                } catch (error) {
+                  console.error("Error deleting ticket:", error);
+                  showToast.error(
+                    "Error",
+                    "An error occurred. Please try again."
+                  );
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Ticket
+            </Button>
+          </div>
         )}
       </div>
 
@@ -750,7 +804,9 @@ export function TicketDetailContent({
                                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                             {progress.photos.map(
                                               (photo, idx) => (
-                                                <img
+                                                <Image
+                                                  width={100}
+                                                  height={100}
                                                   key={idx}
                                                   src={photo}
                                                   alt={`Day ${day} photo ${
@@ -763,7 +819,7 @@ export function TicketDetailContent({
                                           </div>
                                         )}
 
-                                      {progress.shareableLink && (
+                                      {!isAdmin && progress.shareableLink && (
                                         <div className="flex items-center gap-2 text-xs">
                                           <span className="text-muted-foreground">
                                             Shareable Link:
@@ -903,7 +959,9 @@ export function TicketDetailContent({
                                                   key={photoIndex}
                                                   className="relative group"
                                                 >
-                                                  <img
+                                                  <Image
+                                                    width={100}
+                                                    height={100}
                                                     src={photoUrl}
                                                     alt={`Progress photo ${
                                                       photoIndex + 1
@@ -1006,7 +1064,9 @@ export function TicketDetailContent({
                                             </span>{" "}
                                             {progress.fieldOfficerSignatureType ===
                                             "image" ? (
-                                              <img
+                                              <Image
+                                                width={100}
+                                                height={100}
                                                 src={
                                                   progress.fieldOfficerSignature
                                                 }
@@ -1227,6 +1287,8 @@ export function TicketDetailContent({
                         sign
                       </p>
                     </div>
+                  </div>
+                  <div>
                     {ticket.adminSigned ? (
                       <div className="space-y-2">
                         <span className="flex items-center gap-1 text-sm text-green-700 bg-green-100 px-3 py-1 rounded-full">
@@ -1236,10 +1298,12 @@ export function TicketDetailContent({
                         {ticket.adminSignature && (
                           <div className="text-sm">
                             {ticket.adminSignatureType === "image" ? (
-                              <img
+                              <Image
                                 src={ticket.adminSignature}
                                 alt="Admin Signature"
                                 className="max-h-16 border rounded"
+                                width={100}
+                                height={100}
                               />
                             ) : (
                               <p className="font-medium">
