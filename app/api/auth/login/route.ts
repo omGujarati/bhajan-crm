@@ -6,6 +6,11 @@ import {
   incrementFailedLoginAttempts,
   resetFailedLoginAttempts,
   isAccountLocked,
+  findTeamByEmail,
+  findTeamByTeamId,
+  incrementTeamFailedLoginAttempts,
+  resetTeamFailedLoginAttempts,
+  isTeamAccountLocked,
 } from "@/server/db/users";
 import { generateToken } from "@/lib/auth";
 import {
@@ -70,12 +75,80 @@ export async function POST(request: NextRequest) {
 
     // Find user by email or phone - using sanitized input
     let user = null;
+    let team = null;
+    
     if (validation.type === "email") {
       user = await findUserByEmail(validation.sanitized);
+      // Also check if it's a team email
+      if (!user) {
+        team = await findTeamByEmail(validation.sanitized);
+      }
     } else if (validation.type === "phone") {
       user = await findUserByPhone(validation.sanitized);
+    } else {
+      // Could be a teamId (alphanumeric)
+      team = await findTeamByTeamId(identifier.toUpperCase());
     }
 
+    // Handle team login
+    if (team && !user) {
+      // Check if team account is locked
+      const teamLocked = await isTeamAccountLocked(team);
+      if (teamLocked) {
+        const lockedUntil = team.lockedUntil!;
+        const minutesLeft = Math.ceil(
+          (lockedUntil.getTime() - Date.now()) / 60000
+        );
+        return NextResponse.json(
+          {
+            error: `Account is locked due to multiple failed attempts. Please try again in ${minutesLeft} minutes.`,
+          },
+          { status: 423 } // 423 Locked
+        );
+      }
+
+      // Verify team password
+      const isValidTeamPassword = await verifyPassword(password, team.password);
+      if (!isValidTeamPassword) {
+        // Increment failed attempts in database
+        await incrementTeamFailedLoginAttempts(team._id!);
+        recordFailedAttempt(clientIP);
+        return NextResponse.json(
+          { error: "Invalid credentials" }, // Generic message
+          { status: 401 }
+        );
+      }
+
+      // Successful team login - reset failed attempts
+      await resetTeamFailedLoginAttempts(team._id!);
+      clearFailedAttempts(clientIP);
+
+      // Generate token with team info
+      const token = generateToken({
+        userId: team._id!,
+        email: team.email,
+        role: "field_team", // Teams login as field_team role
+        teamId: team.teamId,
+      });
+
+      // Return team data (without password) in user format for compatibility
+      const { password: _, ...teamWithoutPassword } = team;
+      return NextResponse.json({
+        success: true,
+        token,
+        user: {
+          _id: team._id,
+          name: team.name,
+          email: team.email,
+          role: "field_team" as const,
+          teamId: team.teamId,
+          teamIds: [team._id!], // Use team _id as teamIds for compatibility
+          teamNames: [team.name],
+        },
+      });
+    }
+
+    // Handle user login (existing logic)
     // Always return generic error to prevent user enumeration
     if (!user) {
       recordFailedAttempt(clientIP);
@@ -109,8 +182,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
-    const isValidPassword = await verifyPassword(password, user.password);
-    if (!isValidPassword) {
+    const isValidUserPassword = await verifyPassword(password, user.password);
+    if (!isValidUserPassword) {
       // Increment failed attempts in database
       await incrementFailedLoginAttempts(user._id!);
       recordFailedAttempt(clientIP);
@@ -132,7 +205,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Return user data (without password)
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: __, ...userWithoutPassword } = user;
 
     return NextResponse.json({
       success: true,

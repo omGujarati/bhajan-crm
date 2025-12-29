@@ -45,19 +45,40 @@ export async function POST(
 
     // Check permissions (team member must be in assigned team)
     if (payload.role === "field_team") {
-      const user = await findUserById(payload.userId);
-      if (!user) {
-        return NextResponse.json(
-          { error: "User not found" },
-          { status: 404 }
-        );
-      }
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
-        return NextResponse.json(
-          { error: "You don't have permission to upload photos for this ticket" },
-          { status: 403 }
-        );
+      if (payload.teamId) {
+        // Team login
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison (assignedTeamId is stored as string)
+        const teamIdString = team._id?.toString();
+        if (!ticket.assignedTeamId || ticket.assignedTeamId !== teamIdString) {
+          return NextResponse.json(
+            { error: "You don't have permission to upload photos for this ticket" },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Individual user login
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
+          return NextResponse.json(
+            { error: "You don't have permission to upload photos for this ticket" },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -196,22 +217,44 @@ export async function DELETE(
 
     // Check permissions
     if (payload.role === "field_team") {
-      const user = await findUserById(payload.userId);
-      if (!user) {
-        return NextResponse.json(
-          { error: "User not found" },
-          { status: 404 }
-        );
-      }
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
       const progress = ticket.dailyProgress?.find((p) => p._id === progressId);
       
-      // Team member can only delete their own photos
-      if (!progress || progress.addedBy !== payload.userId) {
-        return NextResponse.json(
-          { error: "You can only delete photos from your own progress" },
-          { status: 403 }
-        );
+      if (payload.teamId) {
+        // Team login - check if progress belongs to this team
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison
+        const teamIdString = team._id?.toString();
+        // Team can delete photos from their team's progress
+        if (!progress || progress.addedByTeam !== teamIdString) {
+          return NextResponse.json(
+            { error: "You can only delete photos from your team's progress" },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Individual user login
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        // User can delete photos from progress of their team
+        if (!progress || !progress.addedByTeam || !teamIds.includes(progress.addedByTeam)) {
+          return NextResponse.json(
+            { error: "You can only delete photos from your team's progress" },
+            { status: 403 }
+          );
+        }
       }
     }
 

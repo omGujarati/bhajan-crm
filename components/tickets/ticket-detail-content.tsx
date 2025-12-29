@@ -60,6 +60,7 @@ export function TicketDetailContent({
   const [generatingLink, setGeneratingLink] = useState<string | null>(null); // Changed to progressId
   const [showEditForm, setShowEditForm] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
   const [editingProgressId, setEditingProgressId] = useState<string | null>(
     null
   );
@@ -78,7 +79,7 @@ export function TicketDetailContent({
     setSelectedTeam(initialTicket.assignedTeamId || "");
     loadHistory();
 
-    // Get current user ID from token (decode JWT payload on client)
+    // Get current user ID and team ID from token (decode JWT payload on client)
     try {
       const token = localStorage.getItem("token");
       if (token) {
@@ -88,6 +89,9 @@ export function TicketDetailContent({
           const payload = JSON.parse(atob(parts[1]));
           if (payload && payload.userId) {
             setCurrentUserId(payload.userId);
+          }
+          if (payload && payload.teamId) {
+            setCurrentTeamId(payload.teamId);
           }
         }
       }
@@ -330,7 +334,7 @@ export function TicketDetailContent({
     }
   };
 
-  // Get current day (next day to add progress) - based on current user's progress only
+  // Get current day (next day to add progress) - based on current user's or team's progress
   const getCurrentDay = (): number | null => {
     if (!currentUserId) return null; // Wait for userId to be loaded
 
@@ -338,17 +342,26 @@ export function TicketDetailContent({
       return 1;
     }
 
-    // Filter progress entries by current user
-    const userProgress = ticket.dailyProgress.filter(
-      (p) => p.addedBy === currentUserId
-    );
+    // Filter progress entries by current user or team
+    let userProgress;
+    if (currentTeamId) {
+      // Team login - filter by team's MongoDB _id (which is currentUserId for team logins)
+      userProgress = ticket.dailyProgress.filter(
+        (p) => p.addedByTeam === currentUserId
+      );
+    } else {
+      // Individual user login - filter by user ID
+      userProgress = ticket.dailyProgress.filter(
+        (p) => p.addedBy === currentUserId
+      );
+    }
 
     if (userProgress.length === 0) {
-      // User hasn't added any progress yet, start from day 1
+      // User/team hasn't added any progress yet, start from day 1
       return 1;
     }
 
-    // Get the maximum day for this user
+    // Get the maximum day for this user/team
     const maxDay = Math.max(...userProgress.map((p) => p.day));
     const maxDayProgress = userProgress.find((p) => p.day === maxDay);
 
@@ -615,251 +628,187 @@ export function TicketDetailContent({
             {ticket.dailyProgress && ticket.dailyProgress.length > 0 ? (
               (() => {
                 if (isAdmin) {
-                  // For admin: Group by member, then by day for better organization
-                  const progressByMember = new Map<
+                  // For admin: Group by team, then by day (team-level progress summary)
+                  const progressByTeam = new Map<
                     string,
                     Map<number, typeof ticket.dailyProgress>
                   >();
 
                   ticket.dailyProgress.forEach((p) => {
-                    const memberId = p.addedBy || "unknown";
-                    if (!progressByMember.has(memberId)) {
-                      progressByMember.set(memberId, new Map());
+                    const teamId = p.addedByTeam || "unknown";
+                    if (!progressByTeam.has(teamId)) {
+                      progressByTeam.set(teamId, new Map());
                     }
-                    const memberProgress = progressByMember.get(memberId)!;
-                    if (!memberProgress.has(p.day)) {
-                      memberProgress.set(p.day, []);
+                    const teamProgress = progressByTeam.get(teamId)!;
+                    if (!teamProgress.has(p.day)) {
+                      teamProgress.set(p.day, []);
                     }
-                    memberProgress.get(p.day)!.push(p);
+                    teamProgress.get(p.day)!.push(p);
                   });
 
-                  // Get all members for tabs
-                  const allMembers = Array.from(progressByMember.entries()).map(
-                    ([memberId, dayMap]) => {
+                  // Get all teams for display
+                  const allTeams = Array.from(progressByTeam.entries()).map(
+                    ([teamId, dayMap]) => {
                       const firstProgress = Array.from(dayMap.values())[0]?.[0];
                       return {
-                        id: memberId,
-                        name: firstProgress?.addedByName || "Unknown Member",
-                        email: firstProgress?.addedByEmail || "",
+                        id: teamId,
+                        name:
+                          firstProgress?.addedByTeamName ||
+                          ticket.assignedTeamName ||
+                          "Unknown Team",
+                        email: firstProgress?.addedByTeamEmail || "",
                       };
                     }
                   );
 
-                  // Filter by selected member
-                  const displayMembers =
+                  // Filter by selected team (default to assigned team)
+                  const displayTeams =
                     selectedMemberId === "all"
-                      ? Array.from(progressByMember.entries())
-                      : Array.from(progressByMember.entries()).filter(
-                          ([memberId]) => memberId === selectedMemberId
+                      ? Array.from(progressByTeam.entries())
+                      : Array.from(progressByTeam.entries()).filter(
+                          ([teamId]) => teamId === selectedMemberId
                         );
 
                   return (
                     <div className="space-y-4">
-                      {/* Member Tabs */}
-                      <div className="border-b">
-                        <div className="flex gap-2 overflow-x-auto">
-                          <button
-                            onClick={() => setSelectedMemberId("all")}
-                            className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                              selectedMemberId === "all"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            All Members ({allMembers.length})
-                          </button>
-                          {allMembers.map((member) => (
-                            <button
-                              key={member.id}
-                              onClick={() => setSelectedMemberId(member.id)}
-                              className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                                selectedMemberId === member.id
-                                  ? "border-primary text-primary"
-                                  : "border-transparent text-muted-foreground hover:text-foreground"
-                              }`}
-                            >
-                              {member.name}
-                            </button>
-                          ))}
+                      {/* Team Progress Summary */}
+                      <div className="border rounded-lg p-4 sm:p-6 space-y-4 bg-card">
+                        <div className="border-b pb-3 mb-4">
+                          <h4 className="font-semibold text-lg">
+                            Team Progress Summary
+                          </h4>
+                          {ticket.assignedTeamName && (
+                            <p className="text-sm text-muted-foreground">
+                              {ticket.assignedTeamName}
+                            </p>
+                          )}
                         </div>
-                      </div>
 
-                      {/* Member Progress */}
-                      <div className="space-y-6">
-                        {displayMembers.map(([memberId, dayMap]) => {
-                          const firstProgress = Array.from(
-                            dayMap.values()
-                          )[0]?.[0];
-                          const memberName =
-                            firstProgress?.addedByName || "Unknown Member";
-                          const memberEmail = firstProgress?.addedByEmail || "";
+                        {/* Progress by Day */}
+                        <div className="space-y-6">
+                          {displayTeams.map(([teamId, dayMap]) => {
+                            const firstProgress = Array.from(
+                              dayMap.values()
+                            )[0]?.[0];
+                            const teamName =
+                              firstProgress?.addedByTeamName ||
+                              ticket.assignedTeamName ||
+                              "Unknown Team";
 
-                          return (
-                            <div
-                              key={memberId}
-                              className="border rounded-lg p-4 sm:p-6 space-y-4 bg-card"
-                            >
-                              <div className="border-b pb-3 mb-4">
-                                <h4 className="font-semibold text-lg">
-                                  {memberName}
-                                </h4>
-                                {memberEmail && (
-                                  <p className="text-sm text-muted-foreground">
-                                    {memberEmail}
-                                  </p>
-                                )}
-                              </div>
+                            // Sort days
+                            const sortedDays = Array.from(dayMap.keys()).sort(
+                              (a, b) => a - b
+                            );
 
-                              <div className="space-y-4">
-                                {Array.from(dayMap.entries())
-                                  .sort(([a], [b]) => a - b)
-                                  .map(([day, progressList]) => (
+                            return (
+                              <div key={teamId} className="space-y-4">
+                                {sortedDays.map((day) => {
+                                  const dayProgress = dayMap.get(day) || [];
+                                  const progress = dayProgress[0]; // Only one progress per day per team
+                                  if (!progress) return null;
+
+                                  return (
                                     <div
                                       key={day}
-                                      className="border rounded-lg p-4 bg-muted/30 space-y-3"
+                                      className="border rounded-lg p-4 space-y-3 bg-muted/30"
                                     >
-                                      <div className="flex items-center justify-between flex-wrap gap-2">
-                                        <h5 className="font-medium">
-                                          Day {day}
-                                        </h5>
-                                        <p className="text-xs text-muted-foreground">
-                                          {progressList.length}{" "}
-                                          {progressList.length === 1
-                                            ? "entry"
-                                            : "entries"}
-                                        </p>
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <h5 className="font-medium">
+                                            Day {day}
+                                          </h5>
+                                          <p className="text-xs text-muted-foreground">
+                                            {progress.addedByName && (
+                                              <>
+                                                Added by {progress.addedByName}{" "}
+                                                •{" "}
+                                              </>
+                                            )}
+                                            {new Date(
+                                              progress.addedAt
+                                            ).toLocaleDateString()}
+                                          </p>
+                                        </div>
+                                        {progress.fieldOfficerSigned ? (
+                                          <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                                            <CheckCircle className="h-3 w-3" />
+                                            Signed
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">
+                                            Pending Signature
+                                          </span>
+                                        )}
                                       </div>
 
-                                      {progressList.map((progress, idx) => (
-                                        <div
-                                          key={progress._id || idx}
-                                          className="border rounded-lg p-4 bg-background space-y-3"
-                                        >
-                                          <div className="flex items-center justify-between flex-wrap gap-2">
-                                            <div className="flex items-center gap-2">
-                                              {progress.fieldOfficerSigned ? (
-                                                <span className="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                                                  <CheckCircle className="h-3 w-3" />
-                                                  Approved
-                                                </span>
-                                              ) : (
-                                                <span className="flex items-center gap-1 text-xs text-yellow-700 bg-yellow-100 px-2 py-1 rounded-full">
-                                                  <Clock className="h-3 w-3" />
-                                                  Pending Approval
-                                                </span>
-                                              )}
-                                            </div>
-                                            {progress.addedAt && (
-                                              <p className="text-xs text-muted-foreground">
-                                                {formatDateTime(
-                                                  progress.addedAt
-                                                )}
-                                              </p>
+                                      <p className="text-sm">
+                                        {progress.progressSummary}
+                                      </p>
+
+                                      {progress.photos &&
+                                        progress.photos.length > 0 && (
+                                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {progress.photos.map(
+                                              (photo, idx) => (
+                                                <img
+                                                  key={idx}
+                                                  src={photo}
+                                                  alt={`Day ${day} photo ${
+                                                    idx + 1
+                                                  }`}
+                                                  className="w-full h-32 object-cover rounded border"
+                                                />
+                                              )
                                             )}
                                           </div>
-                                          <div className="bg-muted/50 rounded-lg p-3">
-                                            <p className="text-sm whitespace-pre-wrap">
-                                              {progress.progressSummary}
-                                            </p>
-                                          </div>
+                                        )}
 
-                                          {/* Photos */}
-                                          {progress.photos &&
-                                            progress.photos.length > 0 && (
-                                              <div className="mt-3">
-                                                <p className="text-xs font-medium text-muted-foreground mb-2">
-                                                  Photos:
-                                                </p>
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                  {progress.photos.map(
-                                                    (photoUrl, photoIndex) => (
-                                                      <div
-                                                        key={photoIndex}
-                                                        className="relative group"
-                                                      >
-                                                        <img
-                                                          src={photoUrl}
-                                                          alt={`Progress photo ${
-                                                            photoIndex + 1
-                                                          }`}
-                                                          className="w-full h-24 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
-                                                          onClick={() =>
-                                                            window.open(
-                                                              photoUrl,
-                                                              "_blank"
-                                                            )
-                                                          }
-                                                        />
-                                                      </div>
-                                                    )
-                                                  )}
-                                                </div>
-                                              </div>
-                                            )}
-
-                                          {progress.fieldOfficerSigned &&
-                                            progress.fieldOfficerSignature && (
-                                              <div className="border-t pt-3">
-                                                <p className="text-sm text-muted-foreground">
-                                                  <span className="font-medium">
-                                                    Approved by:
-                                                  </span>{" "}
-                                                  {progress.fieldOfficerSignatureType ===
-                                                  "image" ? (
-                                                    <img
-                                                      src={
-                                                        progress.fieldOfficerSignature
-                                                      }
-                                                      alt="Signature"
-                                                      className="inline-block max-h-12 border rounded"
-                                                    />
-                                                  ) : (
-                                                    progress.fieldOfficerSignature
-                                                  )}
-                                                  {progress.fieldOfficerSignedAt && (
-                                                    <span className="ml-2">
-                                                      on{" "}
-                                                      {formatDateTime(
-                                                        progress.fieldOfficerSignedAt
-                                                      )}
-                                                    </span>
-                                                  )}
-                                                </p>
-                                              </div>
-                                            )}
+                                      {progress.shareableLink && (
+                                        <div className="flex items-center gap-2 text-xs">
+                                          <span className="text-muted-foreground">
+                                            Shareable Link:
+                                          </span>
+                                          <code className="bg-muted px-2 py-1 rounded">
+                                            {window.location.origin}/progress/
+                                            {progress.shareableLink}
+                                          </code>
                                         </div>
-                                      ))}
+                                      )}
                                     </div>
-                                  ))}
+                                  );
+                                })}
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );
                 } else {
-                  // For team members: Group by day, filter by current user
+                  // For team members: Show team progress (not filtered by individual user)
                   const progressByDay = new Map<
                     number,
                     typeof ticket.dailyProgress
                   >();
-                  ticket.dailyProgress.forEach((p) => {
-                    if (!progressByDay.has(p.day)) {
-                      progressByDay.set(p.day, []);
-                    }
-                    progressByDay.get(p.day)!.push(p);
-                  });
 
-                  if (!currentUserId) {
-                    return (
-                      <p className="text-sm text-muted-foreground text-center py-8">
-                        Loading progress...
-                      </p>
-                    );
-                  }
+                  // Get team ID for filtering
+                  // For team login: currentUserId is the team's MongoDB _id, use it to match addedByTeam
+                  // For individual user: use assignedTeamId to match addedByTeam
+                  const teamIdForFilter = currentTeamId
+                    ? currentUserId // Team login - currentUserId is the team's MongoDB _id
+                    : ticket.assignedTeamId; // Individual user - use assignedTeamId
 
-                  // Filter progress by current user
+                  // Filter by assigned team
+                  ticket.dailyProgress
+                    .filter((p) => p.addedByTeam === teamIdForFilter)
+                    .forEach((p) => {
+                      if (!progressByDay.has(p.day)) {
+                        progressByDay.set(p.day, []);
+                      }
+                      progressByDay.get(p.day)!.push(p);
+                    });
+
+                  // For team logins, show all team progress. For individual users, filter by addedBy
                   const filteredProgress: Array<
                     [number, typeof ticket.dailyProgress]
                   > = Array.from(progressByDay.entries())
@@ -867,10 +816,15 @@ export function TicketDetailContent({
                       ([day, progressList]): [
                         number,
                         typeof ticket.dailyProgress
-                      ] => [
-                        day,
-                        progressList.filter((p) => p.addedBy === currentUserId),
-                      ]
+                      ] => {
+                        // If team login, show all team progress. If individual user, filter by addedBy
+                        const filtered = currentTeamId
+                          ? progressList // Team login - show all team progress
+                          : progressList.filter(
+                              (p) => p.addedBy === currentUserId
+                            ); // Individual user - filter by user
+                        return [day, filtered];
+                      }
                     )
                     .filter(([_, progressList]) => progressList.length > 0);
 
@@ -915,8 +869,8 @@ export function TicketDetailContent({
                                         {progress.addedByName && (
                                           <span className="text-xs text-muted-foreground">
                                             by {progress.addedByName}
-                                            {progress.addedByEmail &&
-                                              ` (${progress.addedByEmail})`}
+                                            {progress.addedByTeamEmail &&
+                                              ` (${progress.addedByTeamEmail})`}
                                           </span>
                                         )}
                                       </div>
@@ -964,8 +918,11 @@ export function TicketDetailContent({
                                                   />
                                                   {!isAdmin &&
                                                     !progress.fieldOfficerSigned &&
-                                                    progress.addedBy ===
-                                                      currentUserId && (
+                                                    (currentTeamId
+                                                      ? progress.addedByTeam ===
+                                                        ticket.assignedTeamId
+                                                      : progress.addedBy ===
+                                                        currentUserId) && (
                                                       <button
                                                         onClick={async (e) => {
                                                           e.stopPropagation();
@@ -1072,7 +1029,11 @@ export function TicketDetailContent({
                                       )}
                                     {!isAdmin &&
                                       !progress.fieldOfficerSigned &&
-                                      progress.addedBy === currentUserId && (
+                                      (currentTeamId
+                                        ? progress.addedByTeam ===
+                                          ticket.assignedTeamId
+                                        : progress.addedBy ===
+                                          currentUserId) && (
                                         <div className="flex gap-2 pt-2 border-t">
                                           <Button
                                             size="sm"

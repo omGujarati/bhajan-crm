@@ -53,35 +53,30 @@ export function ProgressForm({
     }
   }, []);
 
-  // Determine which day we're working on (based on current user's progress only)
+  // Determine which day we're working on (based on team progress, not individual member)
   const getCurrentDay = (): number | null => {
     if (editingDay !== null && editingDay !== undefined) {
       return editingDay;
     }
 
-    // If no currentUserId yet, wait for it
-    if (!currentUserId) {
-      return null;
-    }
-
-    // Auto-detect: next day to add progress for THIS USER
+    // Auto-detect: next day to add progress for the team
     if (!ticket.dailyProgress || ticket.dailyProgress.length === 0) {
       return 1;
     }
 
-    // Filter progress entries by current user
-    const userProgress = ticket.dailyProgress.filter(
-      (p) => p.addedBy === currentUserId
+    // Get team progress (filter by assigned team)
+    const teamProgress = ticket.dailyProgress.filter(
+      (p) => p.addedByTeam === ticket.assignedTeamId
     );
 
-    if (userProgress.length === 0) {
-      // User hasn't added any progress yet, start from day 1
+    if (teamProgress.length === 0) {
+      // Team hasn't added any progress yet, start from day 1
       return 1;
     }
 
-    // Get the maximum day for this user
-    const maxDay = Math.max(...userProgress.map((p) => p.day));
-    const maxDayProgress = userProgress.find((p) => p.day === maxDay);
+    // Get the maximum day for this team
+    const maxDay = Math.max(...teamProgress.map((p) => p.day));
+    const maxDayProgress = teamProgress.find((p) => p.day === maxDay);
 
     // Check if max day is signed
     if (maxDayProgress?.fieldOfficerSigned) {

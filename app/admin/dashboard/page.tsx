@@ -48,13 +48,18 @@ export default function AdminDashboard() {
     const userData = localStorage.getItem("user");
 
     if (!token || !userData) {
-      router.push("/login/admin");
+      router.push("/");
       return;
     }
 
     const parsedUser = JSON.parse(userData);
     if (parsedUser.role !== "admin") {
-      router.push("/login/admin");
+      // If logged in as team, redirect to team page
+      if (parsedUser.role === "field_team") {
+        router.push("/team/teams");
+      } else {
+        router.push("/");
+      }
       return;
     }
 

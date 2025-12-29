@@ -57,21 +57,42 @@ export async function POST(
       );
     }
 
-    // Check if user has permission (team member must be in assigned team)
+    // Check if user/team has permission
     if (payload.role === "field_team") {
-      const user = await findUserById(payload.userId);
-      if (!user) {
-        return NextResponse.json(
-          { error: "User not found" },
-          { status: 404 }
-        );
-      }
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
-        return NextResponse.json(
-          { error: "You don't have permission to add progress to this ticket" },
-          { status: 403 }
-        );
+      if (payload.teamId) {
+        // Team login - check if team matches assigned team
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison (assignedTeamId is stored as string)
+        const teamIdString = team._id?.toString();
+        if (!ticket.assignedTeamId || ticket.assignedTeamId !== teamIdString) {
+          return NextResponse.json(
+            { error: "You don't have permission to add progress to this ticket" },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Individual user login - check if user's team matches assigned team
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
+          return NextResponse.json(
+            { error: "You don't have permission to add progress to this ticket" },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -83,12 +104,85 @@ export async function POST(
       );
     }
 
-    // Get user details
-    const user = await findUserById(payload.userId);
-    if (!user) {
+    // Get team details - check if user is logged in as team or individual
+    let teamId: string | undefined;
+    let teamName: string | undefined;
+    let teamEmail: string | undefined;
+    let addedBy: string | undefined;
+    let addedByName: string | undefined;
+
+    if (payload.role === "field_team") {
+      // Check if this is a team login (has teamId in token) or individual user
+      if (payload.teamId) {
+        // Team login
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string (assignedTeamId is stored as string)
+        teamId = team._id?.toString() || team._id!;
+        teamName = team.name;
+        teamEmail = team.email;
+      } else {
+        // Individual user login - get their team
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        // Get the team ID from ticket assignment or user's first team
+        teamId = ticket.assignedTeamId || user.teamIds?.[0] || user.teamId;
+        if (!teamId) {
+          return NextResponse.json(
+            { error: "User is not assigned to a team" },
+            { status: 403 }
+          );
+        }
+        const { findTeamById } = await import("@/server/db/users");
+        const team = await findTeamById(teamId);
+        if (team) {
+          teamName = team.name;
+          teamEmail = team.email;
+        }
+        addedBy = user._id;
+        addedByName = user.name;
+      }
+    } else if (payload.role === "admin") {
+      // Admin can add progress - need team ID from ticket
+      if (!ticket.assignedTeamId) {
+        return NextResponse.json(
+          { error: "Ticket must be assigned to a team to add progress" },
+          { status: 400 }
+        );
+      }
+      const { findTeamById } = await import("@/server/db/users");
+      const team = await findTeamById(ticket.assignedTeamId);
+      if (!team) {
+        return NextResponse.json(
+          { error: "Assigned team not found" },
+          { status: 404 }
+        );
+      }
+      teamId = team._id!;
+      teamName = team.name;
+      teamEmail = team.email;
+      const user = await findUserById(payload.userId);
+      if (user) {
+        addedBy = user._id;
+        addedByName = user.name;
+      }
+    }
+
+    if (!teamId) {
       return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
+        { error: "Unable to determine team" },
+        { status: 400 }
       );
     }
 
@@ -102,14 +196,16 @@ export async function POST(
       );
     }
 
-    // Add progress (each user can add their own progress for each day)
+    // Add progress (tracked per team, not per individual member)
     const newProgressId = await addDailyProgress(
       params.id,
       dayNum,
       sanitizedSummary,
-      payload.userId,
-      user.name,
-      user.email,
+      teamId,
+      teamName,
+      teamEmail,
+      addedBy, // Optional: track which user added it
+      addedByName, // Optional
       progressId, // If editing existing progress
       photos // Include photos array if provided
     );

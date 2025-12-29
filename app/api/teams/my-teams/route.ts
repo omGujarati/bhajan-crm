@@ -19,7 +19,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    // Get current user
+    // Check if this is a team login (has teamId in token) or individual user login
+    if (payload.teamId) {
+      // Team login - return the team that logged in
+      const { findTeamByTeamId } = await import("@/server/db/users");
+      const team = await findTeamByTeamId(payload.teamId);
+      if (!team) {
+        return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      }
+      
+      // Return team in array format for consistency
+      return NextResponse.json({
+        success: true,
+        teams: [team],
+      });
+    }
+
+    // Individual user login - get teams from user
     const user = await findUserById(payload.userId);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });

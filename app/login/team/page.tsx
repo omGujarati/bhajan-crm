@@ -60,8 +60,8 @@ export default function TeamLogin() {
   return (
     <main className="min-h-screen flex items-center justify-center p-8 bg-background">
       <div className="w-full max-w-md p-8 border rounded-lg bg-card shadow-sm">
-        <h1 className="text-3xl font-semibold mb-2">Team Member Login</h1>
-        <p className="text-muted-foreground mb-6">Field Team Access</p>
+        <h1 className="text-3xl font-semibold mb-2">Team Login</h1>
+        <p className="text-muted-foreground mb-6">Login with team email or team ID</p>
 
         <div className="mb-4 flex gap-2">
           <Button

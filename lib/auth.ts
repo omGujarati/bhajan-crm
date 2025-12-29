@@ -6,6 +6,7 @@ export interface TokenPayload {
   userId: string;
   email: string;
   role: string;
+  teamId?: string; // Optional: teamId for team logins
 }
 
 export function generateToken(payload: TokenPayload): string {

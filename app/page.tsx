@@ -28,9 +28,28 @@ export default function Home() {
   const [adminInitialized, setAdminInitialized] = useState(false);
 
   useEffect(() => {
+    // Check if user is already logged in and redirect
+    const token = localStorage.getItem("token");
+    const userData = localStorage.getItem("user");
+
+    if (token && userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser.role === "admin") {
+          router.push("/admin/dashboard");
+          return;
+        } else if (parsedUser.role === "field_team") {
+          router.push("/team/teams");
+          return;
+        }
+      } catch (error) {
+        // Invalid user data, continue to login form
+      }
+    }
+
     fetchTestAPI();
     checkAdmin();
-  }, []);
+  }, [router]);
 
   const fetchTestAPI = async () => {
     try {

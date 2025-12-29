@@ -42,6 +42,8 @@ export default function TeamsPage() {
   const [teamName, setTeamName] = useState("");
   const [teamDescription, setTeamDescription] = useState("");
   const [teamDepartment, setTeamDepartment] = useState("");
+  const [teamEmail, setTeamEmail] = useState("");
+  const [teamPassword, setTeamPassword] = useState("");
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberPhone, setMemberPhone] = useState("");
@@ -121,6 +123,8 @@ export default function TeamsPage() {
           name: teamName,
           description: teamDescription || undefined,
           department: teamDepartment || undefined,
+          email: teamEmail,
+          password: teamPassword,
         }),
       });
 
@@ -159,8 +163,8 @@ export default function TeamsPage() {
         }
       }
 
-      // Add new member if provided
-      if (memberName && memberEmail && memberPassword) {
+      // Add new member if provided (no password needed - members don't have individual logins)
+      if (memberName && memberEmail) {
         try {
           await fetch(`/api/teams/${newTeamId}/members`, {
             method: "POST",
@@ -172,7 +176,6 @@ export default function TeamsPage() {
               name: memberName,
               email: memberEmail,
               phone: memberPhone || undefined,
-              password: memberPassword,
             }),
           });
         } catch (error) {
@@ -183,6 +186,8 @@ export default function TeamsPage() {
       setTeamName("");
       setTeamDescription("");
       setTeamDepartment("");
+      setTeamEmail("");
+      setTeamPassword("");
       setMemberName("");
       setMemberEmail("");
       setMemberPhone("");
@@ -263,6 +268,22 @@ export default function TeamsPage() {
                   value={teamDepartment}
                   onChange={(e) => setTeamDepartment(e.target.value)}
                   placeholder="Enter department name"
+                />
+                <TextField
+                  label="Team Email"
+                  type="email"
+                  value={teamEmail}
+                  onChange={(e) => setTeamEmail(e.target.value)}
+                  placeholder="team@example.com"
+                  required
+                />
+                <TextField
+                  label="Team Password"
+                  type="password"
+                  value={teamPassword}
+                  onChange={(e) => setTeamPassword(e.target.value)}
+                  placeholder="Enter team password"
+                  required
                 />
 
                 {/* Existing Members Selection */}
@@ -347,13 +368,6 @@ export default function TeamsPage() {
                       onChange={(e) => setMemberPhone(e.target.value)}
                       placeholder="Enter phone number"
                     />
-                    <PasswordInput
-                      label="Password"
-                      value={memberPassword}
-                      onChange={(e) => setMemberPassword(e.target.value)}
-                      placeholder="Enter password"
-                      helperText="Required if adding new member"
-                    />
                   </div>
                 </div>
 
@@ -367,10 +381,11 @@ export default function TeamsPage() {
                       setTeamName("");
                       setTeamDescription("");
                       setTeamDepartment("");
+                      setTeamEmail("");
+                      setTeamPassword("");
                       setMemberName("");
                       setMemberEmail("");
                       setMemberPhone("");
-                      setMemberPassword("");
                       setSelectedExistingMembers([]);
                       setShowExistingMembers(false);
                     }}

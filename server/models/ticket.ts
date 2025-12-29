@@ -15,9 +15,11 @@ export interface DailyProgress {
   day: number; // Day number (1, 2, 3, etc.)
   progressSummary: string;
   photos?: string[]; // Array of photo URLs/paths
-  addedBy: string; // User ID who added the progress
-  addedByName?: string; // User name for display
-  addedByEmail?: string; // User email for display
+  addedByTeam: string; // Team ID who added the progress
+  addedByTeamName?: string; // Team name for display
+  addedByTeamEmail?: string; // Team email for display
+  addedBy?: string; // Optional: User ID who added (for tracking which team member added it, but progress is team-level)
+  addedByName?: string; // Optional: User name for display
   addedAt: Date;
   shareableLink?: string; // Short link for field officer
   linkExpiresAt?: Date; // Link expiry time (2 hours)

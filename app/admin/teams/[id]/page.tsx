@@ -72,7 +72,10 @@ export default function TeamDetailsPage() {
     name: "",
     description: "",
     department: "",
+    email: "",
+    password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
 
   const [memberData, setMemberData] = useState({
     name: "",
@@ -91,6 +94,8 @@ export default function TeamDetailsPage() {
     name: "",
     description: "",
     department: "",
+    email: "",
+    password: "",
   });
 
   const [memberErrors, setMemberErrors] = useState({
@@ -117,6 +122,8 @@ export default function TeamDetailsPage() {
           name: data.team.name || "",
           description: data.team.description || "",
           department: data.team.department || "",
+          email: data.team.email || "",
+          password: "", // Don't show existing password
         });
       } else {
         showToast.error("Error", "Failed to load team details");
@@ -183,9 +190,11 @@ export default function TeamDetailsPage() {
         name: team.name || "",
         description: team.description || "",
         department: team.department || "",
+        email: team.email || "",
+        password: "", // Don't reset password field
       });
     }
-    setErrors({ name: "", description: "", department: "" });
+    setErrors({ name: "", description: "", department: "", email: "", password: "" });
     setIsEditing(false);
   };
 
@@ -194,6 +203,8 @@ export default function TeamDetailsPage() {
       name: "",
       description: "",
       department: "",
+      email: "",
+      password: "",
     };
 
     if (!teamData.name.trim()) {
@@ -216,8 +227,23 @@ export default function TeamDetailsPage() {
       }
     }
 
+    if (!teamData.email.trim()) {
+      newErrors.email = "Team email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(teamData.email.trim())) {
+      newErrors.email = "Invalid email format";
+    }
+
+    // Password validation only if provided (optional when editing)
+    if (teamData.password && teamData.password.length > 0) {
+      if (teamData.password.length < 8) {
+        newErrors.password = "Password must be at least 8 characters";
+      } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(teamData.password)) {
+        newErrors.password = "Password must contain uppercase, lowercase, and number";
+      }
+    }
+
     setErrors(newErrors);
-    return !newErrors.name && !newErrors.description && !newErrors.department;
+    return !newErrors.name && !newErrors.description && !newErrors.department && !newErrors.email && !newErrors.password;
   };
 
   const handleSaveTeam = async () => {
@@ -684,6 +710,56 @@ export default function TeamDetailsPage() {
                   disabled={!isEditing}
                   error={errors.department}
                 />
+
+                <TextField
+                  label="Team Email"
+                  type="email"
+                  value={teamData.email}
+                  onChange={(e) => {
+                    setTeamData((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }));
+                    setErrors((prev) => ({ ...prev, email: "" }));
+                  }}
+                  placeholder="team@example.com"
+                  disabled={!isEditing}
+                  error={errors.email}
+                  required
+                />
+
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-sm font-medium">Team Password</label>
+                    {isEditing && (
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? "Hide" : "Show"} current
+                      </button>
+                    )}
+                  </div>
+                  <PasswordInput
+                    value={teamData.password}
+                    onChange={(e) => {
+                      setTeamData((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }));
+                      setErrors((prev) => ({ ...prev, password: "" }));
+                    }}
+                    placeholder={isEditing ? "Enter new password (leave blank to keep current)" : "••••••••"}
+                    disabled={!isEditing}
+                    error={errors.password}
+                  />
+                  {isEditing && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Leave blank to keep current password
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 

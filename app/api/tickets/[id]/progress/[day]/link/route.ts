@@ -37,21 +37,42 @@ export async function POST(
       );
     }
 
-    // Check if user has permission (team member must be in assigned team)
+    // Check if user/team has permission (team member must be in assigned team)
     if (payload.role === "field_team") {
-      const user = await findUserById(payload.userId);
-      if (!user) {
-        return NextResponse.json(
-          { error: "User not found" },
-          { status: 404 }
-        );
-      }
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
-        return NextResponse.json(
-          { error: "You don't have permission to generate link for this ticket" },
-          { status: 403 }
-        );
+      if (payload.teamId) {
+        // Team login
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison (assignedTeamId is stored as string)
+        const teamIdString = team._id?.toString();
+        if (!ticket.assignedTeamId || ticket.assignedTeamId !== teamIdString) {
+          return NextResponse.json(
+            { error: "You don't have permission to generate link for this ticket" },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Individual user login
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
+          return NextResponse.json(
+            { error: "You don't have permission to generate link for this ticket" },
+            { status: 403 }
+          );
+        }
       }
     }
 

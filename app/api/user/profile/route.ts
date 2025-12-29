@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, getTokenFromRequest } from "@/lib/auth";
-import { findUserById, updateUserProfile, findUserByEmail, findUserByPhone } from "@/server/db/users";
+import { findUserById, updateUserProfile, findUserByEmail, findUserByPhone, findTeamById, findTeamByTeamId } from "@/server/db/users";
 import {
   validateEmailOrPhone,
   sanitizeInput,
@@ -22,6 +22,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
+    // Check if this is a team login
+    if (payload.teamId) {
+      const team = await findTeamByTeamId(payload.teamId);
+      if (!team) {
+        return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      }
+      
+      // Return team data in user format for compatibility
+      const { password: _, ...teamWithoutPassword } = team;
+      return NextResponse.json({
+        success: true,
+        user: {
+          _id: team._id,
+          name: team.name,
+          email: team.email,
+          role: "field_team" as const,
+          teamId: team.teamId,
+          teamIds: [team._id!],
+          teamNames: [team.name],
+        },
+      });
+    }
+
+    // Individual user login
     const user = await findUserById(payload.userId);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -55,6 +79,14 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const { name, email, phone } = body;
+
+    // Teams cannot update their profile through this endpoint (use team update endpoint)
+    if (payload.teamId) {
+      return NextResponse.json(
+        { error: "Team profiles should be updated through team management" },
+        { status: 403 }
+      );
+    }
 
     const updates: { name?: string; email?: string; phone?: string } = {};
 

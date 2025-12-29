@@ -85,10 +85,18 @@ export default function TeamTicketDetailsPage() {
     loadTicket();
   };
 
+  const getUserDisplay = () => {
+    if (!user) return undefined;
+    return {
+      name: user.name || (user as any).teamName || "Team",
+      email: user.email || (user as any).teamEmail || "",
+    };
+  };
+
   if (loading || loadingTicket) {
     return (
       <TeamLayout
-        user={user ? { name: user.name, email: user.email } : undefined}
+        user={getUserDisplay()}
         onLogout={handleLogout}
       >
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -101,7 +109,7 @@ export default function TeamTicketDetailsPage() {
   if (!ticket) {
     return (
       <TeamLayout
-        user={user ? { name: user.name, email: user.email } : undefined}
+        user={getUserDisplay()}
         onLogout={handleLogout}
       >
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -113,7 +121,7 @@ export default function TeamTicketDetailsPage() {
 
   return (
     <TeamLayout
-      user={user ? { name: user.name, email: user.email } : undefined}
+      user={getUserDisplay()}
       onLogout={handleLogout}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

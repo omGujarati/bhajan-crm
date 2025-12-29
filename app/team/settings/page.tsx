@@ -308,7 +308,10 @@ export default function TeamSettingsPage() {
   if (loading) {
     return (
       <TeamLayout
-        user={user ? { name: user.name, email: user.email } : undefined}
+        user={user ? { 
+          name: user.name || (user as any).teamName || "Team", 
+          email: user.email || (user as any).teamEmail || "" 
+        } : undefined}
         onLogout={handleLogout}
       >
         <div className="flex items-center justify-center min-h-[60vh]">

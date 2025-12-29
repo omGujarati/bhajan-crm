@@ -25,11 +25,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, department } = body;
+    const { name, description, department, email, password } = body;
 
     if (!name) {
       return NextResponse.json(
         { error: "Team name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "Team email and password are required" },
         { status: 400 }
       );
     }
@@ -97,10 +104,44 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Validate email
+    const { validateEmailOrPhone, isValidPassword } = await import("@/lib/validation");
+    const emailValidation = validateEmailOrPhone(email);
+    if (!emailValidation.isValid || emailValidation.type !== "email") {
+      return NextResponse.json(
+        { error: "Invalid email format" },
+        { status: 400 }
+      );
+    }
+    const sanitizedEmail = emailValidation.sanitized;
+
+    // Check if team email already exists
+    const { findTeamByEmail } = await import("@/server/db/users");
+    const existingTeam = await findTeamByEmail(sanitizedEmail);
+    if (existingTeam) {
+      return NextResponse.json(
+        { error: "Team with this email already exists" },
+        { status: 400 }
+      );
+    }
+
+    // Validate password strength
+    if (!isValidPassword(password)) {
+      return NextResponse.json(
+        {
+          error:
+            "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number",
+        },
+        { status: 400 }
+      );
+    }
+
     const teamId = await createTeam({
       name: sanitizedName,
       description: sanitizedDescription,
       department: sanitizedDepartment,
+      email: sanitizedEmail,
+      password: password, // Will be hashed in createTeam
       createdBy: payload.userId,
     });
 

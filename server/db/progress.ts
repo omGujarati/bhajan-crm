@@ -12,14 +12,16 @@ function generateShortLinkId(): string {
   return crypto.randomBytes(4).toString("base64url").substring(0, 8).toUpperCase();
 }
 
-// Add daily progress to ticket (each user can add their own progress for each day)
+// Add daily progress to ticket (tracked per team, not per individual member)
 export async function addDailyProgress(
   ticketId: string,
   day: number,
   progressSummary: string,
-  addedBy: string,
-  addedByName?: string,
-  addedByEmail?: string,
+  addedByTeam: string, // Team ID
+  addedByTeamName?: string,
+  addedByTeamEmail?: string,
+  addedBy?: string, // Optional: User ID who added (for tracking)
+  addedByName?: string, // Optional: User name
   progressId?: string, // If provided, update existing progress
   photos?: string[] // Photos array
 ): Promise<string> {
@@ -31,6 +33,18 @@ export async function addDailyProgress(
   
   if (!ticket) {
     throw new Error("Ticket not found");
+  }
+
+  // Check if progress for this day already exists for this team
+  // Only one progress entry per day per team
+  if (!progressId) {
+    const existingProgress = ticket.dailyProgress?.find(
+      (p) => p.day === day && p.addedByTeam === addedByTeam
+    );
+    if (existingProgress) {
+      // Update existing progress instead of creating new one
+      progressId = existingProgress._id;
+    }
   }
 
   // Generate unique ID for this progress entry
@@ -50,14 +64,16 @@ export async function addDailyProgress(
     day,
     progressSummary,
     photos: finalPhotos,
-    addedBy,
-    addedByName,
-    addedByEmail,
+    addedByTeam,
+    addedByTeamName,
+    addedByTeamEmail,
+    addedBy, // Optional: track which team member added it
+    addedByName, // Optional
     addedAt: new Date(),
     fieldOfficerSigned: false,
   };
 
-  if (progressId) {
+  if (progressId && ticket.dailyProgress?.find((p) => p._id === progressId)) {
     // Update existing progress
     await db
       .collection(TICKETS_COLLECTION)
@@ -67,9 +83,11 @@ export async function addDailyProgress(
           $set: {
             "dailyProgress.$[elem].progressSummary": progressSummary,
             "dailyProgress.$[elem].photos": finalPhotos,
+            "dailyProgress.$[elem].addedByTeam": addedByTeam,
+            "dailyProgress.$[elem].addedByTeamName": addedByTeamName,
+            "dailyProgress.$[elem].addedByTeamEmail": addedByTeamEmail,
             "dailyProgress.$[elem].addedBy": addedBy,
             "dailyProgress.$[elem].addedByName": addedByName,
-            "dailyProgress.$[elem].addedByEmail": addedByEmail,
             "dailyProgress.$[elem].addedAt": new Date(),
             updatedAt: new Date(),
           },
@@ -79,7 +97,7 @@ export async function addDailyProgress(
         }
       );
   } else {
-    // Add new progress (each user can add their own)
+    // Add new progress (one per day per team)
     await db
       .collection(TICKETS_COLLECTION)
       .updateOne(

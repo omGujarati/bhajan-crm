@@ -32,28 +32,51 @@ export async function GET(
       );
     }
 
-    // Check if user is admin or a member of this team
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Admins can view any team, team members can only view teams they belong to
-    if (payload.role !== "admin") {
-      if (user.role !== "field_team") {
+    // Check if this is a team login or individual user login
+    if (payload.teamId) {
+      // Team login - check if this is their team
+      const { findTeamByTeamId } = await import("@/server/db/users");
+      const loggedInTeam = await findTeamByTeamId(payload.teamId);
+      if (!loggedInTeam) {
         return NextResponse.json(
-          { error: "Only admins and team members can view team details" },
+          { error: "Team not found" },
+          { status: 404 }
+        );
+      }
+      // Compare team._id (ObjectId) with params.id (string) - convert both to strings
+      const teamIdStr = loggedInTeam._id?.toString();
+      if (teamIdStr !== params.id) {
+        return NextResponse.json(
+          { error: "You can only view your own team" },
           { status: 403 }
         );
       }
-      
-      // Check if user is a member of this team
-      const userTeamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      if (!userTeamIds.includes(params.id)) {
-        return NextResponse.json(
-          { error: "You can only view teams you are assigned to" },
-          { status: 403 }
-        );
+    } else {
+      // Individual user login
+      if (payload.role === "admin") {
+        // Admins can view any team
+      } else {
+        // Check if user is a member of this team
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+        
+        if (user.role !== "field_team") {
+          return NextResponse.json(
+            { error: "Only admins and team members can view team details" },
+            { status: 403 }
+          );
+        }
+        
+        // Check if user is a member of this team
+        const userTeamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        if (!userTeamIds.includes(params.id)) {
+          return NextResponse.json(
+            { error: "You can only view teams you are assigned to" },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -98,12 +121,14 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, description, department } = body;
+    const { name, description, department, email, password } = body;
 
     const updates: {
       name?: string;
       description?: string;
       department?: string;
+      email?: string;
+      password?: string;
     } = {};
 
     // Validate and sanitize name
@@ -178,6 +203,45 @@ export async function PATCH(
 
         updates.department = sanitizedDepartment;
       }
+    }
+
+    // Validate and sanitize email
+    if (email !== undefined) {
+      const { validateEmailOrPhone } = await import("@/lib/validation");
+      const emailValidation = validateEmailOrPhone(email);
+      if (!emailValidation.isValid || emailValidation.type !== "email") {
+        return NextResponse.json(
+          { error: "Invalid email format" },
+          { status: 400 }
+        );
+      }
+      
+      // Check if email is already taken by another team
+      const { findTeamByEmail } = await import("@/server/db/users");
+      const existingTeam = await findTeamByEmail(emailValidation.sanitized);
+      if (existingTeam && existingTeam._id !== params.id) {
+        return NextResponse.json(
+          { error: "Email is already in use by another team" },
+          { status: 400 }
+        );
+      }
+      
+      updates.email = emailValidation.sanitized;
+    }
+
+    // Validate password if provided
+    if (password !== undefined && password !== "") {
+      const { isValidPassword } = await import("@/lib/validation");
+      if (!isValidPassword(password)) {
+        return NextResponse.json(
+          {
+            error:
+              "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number",
+          },
+          { status: 400 }
+        );
+      }
+      updates.password = password; // Will be hashed in updateTeam
     }
 
     // Update team

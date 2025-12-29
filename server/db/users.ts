@@ -154,16 +154,21 @@ export async function verifyPassword(
 
 // Team operations
 export async function createTeam(
-  teamData: Omit<Team, "_id" | "teamId" | "createdAt" | "updatedAt">
+  teamData: Omit<Team, "_id" | "teamId" | "createdAt" | "updatedAt" | "password"> & { password: string }
 ): Promise<string> {
   const db = await connectToDatabase();
 
   // Generate unique team ID
   const teamId = await generateTeamId();
 
+  // Hash password
+  const hashedPassword = await bcrypt.hash(teamData.password, 10);
+
   const team: Omit<Team, "_id"> = {
     ...teamData,
+    password: hashedPassword,
     teamId,
+    failedLoginAttempts: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -178,13 +183,25 @@ export async function updateTeam(
     name?: string;
     description?: string;
     department?: string;
+    email?: string;
+    password?: string; // Will be hashed if provided
   }
 ): Promise<void> {
   const db = await connectToDatabase();
   const updateData: any = {
-    ...updates,
     updatedAt: new Date(),
   };
+
+  // Only include fields that are actually being updated
+  if (updates.name !== undefined) updateData.name = updates.name;
+  if (updates.description !== undefined) updateData.description = updates.description;
+  if (updates.department !== undefined) updateData.department = updates.department;
+  if (updates.email !== undefined) updateData.email = updates.email.toLowerCase();
+  
+  // Hash password if provided
+  if (updates.password !== undefined && updates.password !== "") {
+    updateData.password = await bcrypt.hash(updates.password, 10);
+  }
 
   await db
     .collection(TEAMS_COLLECTION)
@@ -200,6 +217,60 @@ export async function findTeamByTeamId(teamId: string): Promise<Team | null> {
     .collection<Team>(TEAMS_COLLECTION)
     .findOne({ teamId });
   return team;
+}
+
+export async function findTeamByEmail(email: string): Promise<Team | null> {
+  const db = await connectToDatabase();
+  const team = await db
+    .collection<Team>(TEAMS_COLLECTION)
+    .findOne({ email: email.toLowerCase() });
+  return team;
+}
+
+export async function incrementTeamFailedLoginAttempts(
+  teamId: string
+): Promise<void> {
+  const db = await connectToDatabase();
+  const team = await findTeamById(teamId);
+  if (!team) return;
+
+  const failedAttempts = (team.failedLoginAttempts || 0) + 1;
+  const maxAttempts = 5;
+  const lockDuration = 30 * 60 * 1000; // 30 minutes
+
+  const update: any = {
+    failedLoginAttempts: failedAttempts,
+    updatedAt: new Date(),
+  };
+
+  // Lock account after max attempts
+  if (failedAttempts >= maxAttempts) {
+    update.lockedUntil = new Date(Date.now() + lockDuration);
+  }
+
+  await db
+    .collection(TEAMS_COLLECTION)
+    .updateOne({ _id: new ObjectId(teamId) as any }, { $set: update });
+}
+
+export async function resetTeamFailedLoginAttempts(teamId: string): Promise<void> {
+  const db = await connectToDatabase();
+  await db.collection(TEAMS_COLLECTION).updateOne(
+    { _id: new ObjectId(teamId) as any },
+    {
+      $set: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLogin: new Date(),
+        updatedAt: new Date(),
+      },
+    }
+  );
+}
+
+export async function isTeamAccountLocked(team: Team): Promise<boolean> {
+  if (!team.lockedUntil) return false;
+  return new Date() < team.lockedUntil;
 }
 
 export async function deleteTeam(teamId: string): Promise<void> {

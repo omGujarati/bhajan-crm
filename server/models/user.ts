@@ -26,7 +26,12 @@ export interface Team {
   name: string;
   description?: string;
   department?: string;
+  email: string; // Team email for login
+  password: string; // Hashed team password for login
   createdBy: string; // Admin user ID
+  failedLoginAttempts?: number; // Track failed login attempts
+  lockedUntil?: Date; // Account lockout timestamp
+  lastLogin?: Date; // Last successful login
   createdAt: Date;
   updatedAt: Date;
 }

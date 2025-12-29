@@ -27,15 +27,6 @@ export async function GET(
       );
     }
 
-    // Get user to check permissions
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
     const ticket = await findTicketById(params.id);
     if (!ticket) {
       return NextResponse.json(
@@ -44,15 +35,44 @@ export async function GET(
       );
     }
 
-    // Check if user has permission to view this ticket
+    // Check if user/team has permission to view this ticket
     if (payload.role === "field_team") {
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      // Team members can see tickets they created OR tickets assigned to their team
-      if (ticket.createdBy !== payload.userId && (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId))) {
-        return NextResponse.json(
-          { error: "You don't have permission to view this ticket" },
-          { status: 403 }
-        );
+      if (payload.teamId) {
+        // Team login - check if ticket is assigned to this team
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison (assignedTeamId is stored as string)
+        const teamIdString = team._id?.toString();
+        // Team can see tickets assigned to them OR tickets they created
+        if (ticket.createdBy !== payload.userId && (!ticket.assignedTeamId || ticket.assignedTeamId !== teamIdString)) {
+          return NextResponse.json(
+            { error: "You don't have permission to view this ticket" },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Individual user login
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        // Team members can see tickets they created OR tickets assigned to their team
+        if (ticket.createdBy !== payload.userId && (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId))) {
+          return NextResponse.json(
+            { error: "You don't have permission to view this ticket" },
+            { status: 403 }
+          );
+        }
       }
     }
 

@@ -42,12 +42,12 @@ export async function POST(
     }
 
     const body = await request.json();
-    let { name, email, phone, password } = body;
+    let { name, email, phone } = body;
 
-    // Validate required fields
-    if (!name || !email || !password) {
+    // Validate required fields (password no longer required - members don't have individual logins)
+    if (!name || !email) {
       return NextResponse.json(
-        { error: "Name, email, and password are required" },
+        { error: "Name and email are required" },
         { status: 400 }
       );
     }
@@ -90,42 +90,44 @@ export async function POST(
       phone = phoneValidation.sanitized;
     }
 
-    // Validate password strength
-    if (!isValidPassword(password)) {
-      return NextResponse.json(
-        {
-          error:
-            "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number",
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if user already exists
+    // Check if user already exists (members are just records, not login accounts)
     const existingUser = await findUserByEmail(email);
     if (existingUser) {
-      return NextResponse.json(
-        { error: "User with this email already exists" },
-        { status: 400 }
-      );
+      // If user exists, just assign them to the team if not already assigned
+      const userTeamIds = existingUser.teamIds || (existingUser.teamId ? [existingUser.teamId] : []);
+      if (!userTeamIds.includes(params.id)) {
+        await assignUserToTeam(existingUser._id!, params.id, team.name);
+      }
+      return NextResponse.json({
+        success: true,
+        message: "Team member added successfully",
+        userId: existingUser._id,
+      });
     }
 
     if (phone) {
       const existingPhoneUser = await findUserByPhone(phone);
       if (existingPhoneUser) {
-        return NextResponse.json(
-          { error: "User with this phone number already exists" },
-          { status: 400 }
-        );
+        const userTeamIds = existingPhoneUser.teamIds || (existingPhoneUser.teamId ? [existingPhoneUser.teamId] : []);
+        if (!userTeamIds.includes(params.id)) {
+          await assignUserToTeam(existingPhoneUser._id!, params.id, team.name);
+        }
+        return NextResponse.json({
+          success: true,
+          message: "Team member added successfully",
+          userId: existingPhoneUser._id,
+        });
       }
     }
 
-    // Create user with team in array format
+    // Create user record without password (members don't have individual logins)
+    // Use a placeholder password that will never be used
+    const placeholderPassword = `placeholder_${Date.now()}_${Math.random()}`;
     const userId = await createUser({
       name,
       email,
       phone: phone || undefined,
-      password,
+      password: placeholderPassword, // Placeholder - not used for login
       role: "field_team" as UserRole,
       teamIds: [params.id],
       teamNames: [team.name],

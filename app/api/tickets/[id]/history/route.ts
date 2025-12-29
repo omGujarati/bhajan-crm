@@ -27,15 +27,6 @@ export async function GET(
       );
     }
 
-    // Get user to check permissions
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
     // Check if ticket exists
     const ticket = await findTicketById(params.id);
     if (!ticket) {
@@ -45,14 +36,42 @@ export async function GET(
       );
     }
 
-    // Check if user has permission to view this ticket
+    // Check if user/team has permission to view this ticket
     if (payload.role === "field_team") {
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
-        return NextResponse.json(
-          { error: "You don't have permission to view this ticket" },
-          { status: 403 }
-        );
+      if (payload.teamId) {
+        // Team login
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison (assignedTeamId is stored as string)
+        const teamIdString = team._id?.toString();
+        if (!ticket.assignedTeamId || ticket.assignedTeamId !== teamIdString) {
+          return NextResponse.json(
+            { error: "You don't have permission to view this ticket" },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Individual user login
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        if (!ticket.assignedTeamId || !teamIds.includes(ticket.assignedTeamId)) {
+          return NextResponse.json(
+            { error: "You don't have permission to view this ticket" },
+            { status: 403 }
+          );
+        }
       }
     }
 

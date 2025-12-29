@@ -24,41 +24,59 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get user to check role and team assignments
-    const user = await findUserById(payload.userId);
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    // Build filters based on user role
+    // Build filters based on user/team role
     const filters: any = {};
     
     if (payload.role === "field_team") {
-      // Team members can see:
-      // 1. Tickets they created (createdBy)
-      // 2. Tickets assigned to their teams (assignedTeamId)
-      const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
-      
-      // Build OR condition for MongoDB query
-      const orConditions: any[] = [
-        { createdBy: payload.userId }, // Tickets created by this user
-      ];
-      
-      if (teamIds.length > 0) {
-        orConditions.push({ assignedTeamId: { $in: teamIds } });
-      }
-      
-      if (orConditions.length > 0) {
-        filters.$or = orConditions;
+      if (payload.teamId) {
+        // Team login - get team ID
+        const { findTeamByTeamId } = await import("@/server/db/users");
+        const team = await findTeamByTeamId(payload.teamId);
+        if (!team) {
+          return NextResponse.json(
+            { error: "Team not found" },
+            { status: 404 }
+          );
+        }
+        // Convert team._id to string for comparison (assignedTeamId is stored as string)
+        const teamIdString = team._id?.toString();
+        // Team can see tickets assigned to them OR tickets they created
+        filters.$or = [
+          { createdBy: payload.userId }, // Tickets created by team
+          { assignedTeamId: teamIdString }, // Tickets assigned to this team
+        ];
       } else {
-        // If user has no teams and hasn't created any tickets, return empty
-        return NextResponse.json({
-          success: true,
-          tickets: [],
-        });
+        // Individual user login
+        const user = await findUserById(payload.userId);
+        if (!user) {
+          return NextResponse.json(
+            { error: "User not found" },
+            { status: 404 }
+          );
+        }
+        // Team members can see:
+        // 1. Tickets they created (createdBy)
+        // 2. Tickets assigned to their teams (assignedTeamId)
+        const teamIds = user.teamIds || (user.teamId ? [user.teamId] : []);
+        
+        // Build OR condition for MongoDB query
+        const orConditions: any[] = [
+          { createdBy: payload.userId }, // Tickets created by this user
+        ];
+        
+        if (teamIds.length > 0) {
+          orConditions.push({ assignedTeamId: { $in: teamIds } });
+        }
+        
+        if (orConditions.length > 0) {
+          filters.$or = orConditions;
+        } else {
+          // If user has no teams and hasn't created any tickets, return empty
+          return NextResponse.json({
+            success: true,
+            tickets: [],
+          });
+        }
       }
     }
     // Admins can see all tickets (no filter)
