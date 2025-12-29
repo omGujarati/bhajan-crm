@@ -28,6 +28,7 @@ interface Team {
   name: string;
   description?: string;
   department?: string;
+  email?: string;
   createdAt: string;
   updatedAt: string;
 }

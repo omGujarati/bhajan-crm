@@ -5,6 +5,7 @@ import {
   createUser,
   findUserByEmail,
   findUserByPhone,
+  assignUserToTeam,
 } from "@/server/db/users";
 import { UserRole } from "@/server/models/user";
 import {
